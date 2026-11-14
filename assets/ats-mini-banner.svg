@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+  <title id="title">ATS Mini Firmware</title>
+  <desc id="desc">Banner for the ATS Mini firmware repository, with a microcontroller-inspired circuit design.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#10253a"/>
+      <stop offset="1" stop-color="#123d4c"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#56e0c2"/>
+      <stop offset="1" stop-color="#6da8ff"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#9bd5e7" stroke-opacity=".07" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1600" height="520" rx="28" fill="url(#bg)"/>
+  <rect width="1600" height="520" rx="28" fill="url(#grid)"/>
+  <circle cx="1320" cy="210" r="220" fill="#35d4b0" opacity=".06"/>
+  <circle cx="1320" cy="210" r="155" fill="none" stroke="#56e0c2" stroke-opacity=".18" stroke-width="2"/>
+  <circle cx="1320" cy="210" r="116" fill="none" stroke="#6da8ff" stroke-opacity=".25" stroke-width="2" stroke-dasharray="5 12"/>
+  <g fill="none" stroke="url(#accent)" stroke-width="3" stroke-linecap="round" opacity=".8">
+    <path d="M1000 118h110v55h74"/><path d="M1000 175h72v80h112"/><path d="M1000 307h140v-38h62"/>
+    <path d="M1450 145h-54v-35h-74"/><path d="M1450 235h-83v70h-54"/><path d="M1428 338h-88v48h-105"/>
+    <path d="M1272 105v-38h-74"/><path d="M1350 343v54h74"/>
+  </g>
+  <g fill="#56e0c2" filter="url(#glow)">
+    <circle cx="1184" cy="173" r="5"/><circle cx="1184" cy="255" r="5"/><circle cx="1202" cy="269" r="5"/>
+    <circle cx="1322" cy="110" r="5"/><circle cx="1313" cy="305" r="5"/><circle cx="1235" cy="397" r="5"/>
+  </g>
+  <g transform="translate(1252 142)">
+    <rect x="0" y="0" width="136" height="136" rx="18" fill="#091827" stroke="#56e0c2" stroke-opacity=".85" stroke-width="3"/>
+    <rect x="14" y="14" width="108" height="108" rx="10" fill="#102a3b" stroke="#6da8ff" stroke-opacity=".55"/>
+    <path d="M-14 28h14M-14 52h14M-14 76h14M-14 100h14M136 28h14M136 52h14M136 76h14M136 100h14M28-14v14M52-14v14M76-14v14M100-14v14M28 136v14M52 136v14M76 136v14M100 136v14" stroke="#56e0c2" stroke-width="4" stroke-linecap="round"/>
+    <text x="68" y="67" fill="#f3fbff" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" text-anchor="middle">ATS</text>
+    <text x="68" y="94" fill="#56e0c2" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700" text-anchor="middle">MINI</text>
+  </g>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="112" y="210" fill="#56e0c2" font-size="20" font-weight="700" letter-spacing="5">FIRMWARE PROJECT</text>
+    <text x="108" y="288" fill="#f4f8fc" font-size="68" font-weight="700" letter-spacing="-2">ATS Mini Firmware</text>
+    <rect x="112" y="322" width="108" height="5" rx="2.5" fill="url(#accent)"/>
+    <text x="112" y="375" fill="#b7c9d8" font-size="25">Prebuilt firmware · Flash files · Installation guide</text>
+    <text x="112" y="430" fill="#7f9aad" font-size="17" letter-spacing="2">DOCUMENTATION  /  RELEASES  /  HARDWARE</text>
+  </g>
+</svg>

@@ -1,53 +1,63 @@
-# ATS Mini Firmware
+<p align="center">
+  <img src="assets/ats-mini-banner.svg" alt="ATS Mini Firmware — firmware project banner" width="100%">
+</p>
 
-Firmware binario para dispositivos ATS Mini, con archivos listos para flashear y una guía de instalación basada en offsets de memoria.
+<p align="center">
+  <strong>Firmware binario para ATS Mini</strong><br>
+  Archivos listos para flashear, offsets de memoria y guía de instalación.
+</p>
+
+---
 
 ## Descripción general
 
-Este repositorio reúne los archivos necesarios para actualizar o restaurar el firmware de un ATS Mini. Incluye los binarios principales y la información de offsets para escribirlos en la flash del dispositivo de forma segura.
+Este repositorio reúne los archivos necesarios para actualizar o restaurar el firmware de un ATS Mini. Incluye los binarios principales y la información de offsets para escribirlos en la memoria flash.
 
-> Advertencia: los archivos de firmware deben ser compatibles con tu modelo y revisión exacta del hardware. Un firmware incorrecto puede dejar el dispositivo inutilizable o requerir procedimientos de recuperación manual.
+> **Advertencia:** verifica que los archivos sean compatibles con el modelo y la revisión exacta de tu hardware. Un firmware incorrecto puede dejar el dispositivo inutilizable. Conserva una copia del firmware actual si es posible.
 
 ## Contenido del repositorio
 
 ```text
-ATSMINI/
-├── FLASH-OFFSETS.txt
-├── boot_app0.bin
-├── bootloader.bin
-├── firmware.bin
-├── partitions.bin
-README.md
+.
+├── ATSMINI/
+│   ├── FLASH-OFFSETS.txt
+│   ├── boot_app0.bin
+│   ├── bootloader.bin
+│   ├── firmware.bin
+│   └── partitions.bin
+├── assets/
+│   └── ats-mini-banner.svg
+├── docs/
+│   └── FLASHING.md
+└── README.md
 ```
 
-## Archivos principales
+## Archivos de firmware
 
-| Archivo | Descripción | Offset |
+| Archivo | Descripción | Offset de flash |
 | --- | --- | ---: |
 | `ATSMINI/bootloader.bin` | Cargador de arranque | `0x00000` |
 | `ATSMINI/partitions.bin` | Tabla de particiones | `0x08000` |
 | `ATSMINI/boot_app0.bin` | Imagen de arranque | `0x0E000` |
 | `ATSMINI/firmware.bin` | Firmware principal | `0x10000` |
-| `ATSMINI/FLASH-OFFSETS.txt` | Instrucciones rápidas y offsets | — |
 
 ## Requisitos
 
-- ATS Mini compatible con esta imagen.
-- Cable USB de datos.
-- Puerto serie disponible en tu sistema.
-- Python 3.x instalado.
-- `esptool` instalado:
+- Un ATS Mini compatible con esta imagen.
+- Cable USB de datos y puerto serial disponible.
+- Python 3.x y [esptool](https://github.com/espressif/esptool).
+
+Instala esptool con:
 
 ```bash
 python -m pip install esptool
 ```
 
-## Procedimiento de flasheo
+## Flasheo
 
-1. Clona o descarga el repositorio.
-2. Conecta el ATS Mini al equipo y identifica el puerto serial.
-3. En Windows puede ser `COMx`; en Linux/macOS suele ser `/dev/ttyUSB0`, `/dev/ttyACM0` o similar.
-4. Ejecuta el siguiente comando desde la raíz del proyecto:
+1. Descarga o clona este repositorio.
+2. Conecta el dispositivo e identifica el puerto serial (`COMx` en Windows o `/dev/tty...` en Linux/macOS).
+3. Desde el directorio raíz del repositorio, ejecuta:
 
 ```bash
 python -m esptool --port <PUERTO> write-flash \
@@ -57,43 +67,21 @@ python -m esptool --port <PUERTO> write-flash \
   0x10000 ATSMINI/firmware.bin
 ```
 
-Reemplaza `<PUERTO>` con el puerto real del dispositivo.
+Reemplaza `<PUERTO>` por el puerto real. La sintaxis puede variar según la versión de esptool; consulta `python -m esptool --help` si es necesario. No borres la memoria flash completa salvo que las instrucciones específicas de tu dispositivo lo indiquen.
 
-## Verificación
+Para una guía ampliada, consulta [`docs/FLASHING.md`](docs/FLASHING.md). Los offsets también están documentados en [`ATSMINI/FLASH-OFFSETS.txt`](ATSMINI/FLASH-OFFSETS.txt).
 
-Después del flasheo:
+## Seguridad y compatibilidad
 
-- desconecta y vuelve a conectar el equipo,
-- observa si el ATS Mini enciende correctamente,
-- comprueba que la funcionalidad esperada responde como se espera,
-- si aparece un problema, revisa el puerto, la compatibilidad del firmware y el procedimiento de instalación.
-
-## Seguridad y advertencias
-
-- No flashees un firmware que no hayas verificado como compatible.
-- Asegúrate de contar con una copia de seguridad si el equipo ya tiene configuración crítica.
-- No compartas información sensible, seriales ni credenciales durante el diagnóstico.
-- Este repositorio no incluye documentación de hardware completa ni instrucciones oficiales del fabricante; usa la información con precaución.
+- Confirma el modelo y la revisión del hardware antes de flashear.
+- No instales firmware de compatibilidad desconocida.
+- Si el dispositivo contiene datos o configuración importantes, respáldalos antes de comenzar.
+- Este repositorio no incluye documentación completa del hardware ni instrucciones oficiales del fabricante.
 
 ## Soporte
 
-Si deseas reportar un problema o pedir ayuda:
+Al reportar un problema, incluye el modelo y revisión del dispositivo, sistema operativo, versión de esptool y el mensaje de error. No publiques números de serie, credenciales ni otros datos privados.
 
-- incluye el modelo exacto del ATS Mini,
-- indica la versión del firmware,
-- menciona el sistema operativo,
-- comparte el puerto serial usado,
-- adjunta el mensaje de error completo.
+## Licencia
 
-## Nota legal
-
-No se ha especificado una licencia para este repositorio. Antes de reutilizar, redistribuir o publicar este firmware, confirma con el propietario o con el autor original si se permite su uso y distribución.
-
-## Estado del proyecto
-
-El repositorio está preparado para almacenamiento y distribución de firmware, con una documentación básica para flasheo y uso. Si deseas, puede ampliarse con:
-
-- una guía detallada de instalación,
-- una sección de troubleshooting,
-- un changelog,
-- y un diseño visual más premium para GitHub.
+Este repositorio no especifica una licencia. No se debe asumir que el firmware puede modificarse, redistribuirse o reutilizarse libremente; consulta al titular de los derechos antes de hacerlo.
