@@ -1,52 +1,99 @@
 # ATS Mini Firmware
 
-Firmware precompilado para el dispositivo ATS Mini. Este repositorio contiene los archivos binarios y los offsets necesarios para grabarlos en la memoria flash.
+Firmware binario para dispositivos ATS Mini, con archivos listos para flashear y una guía de instalación basada en offsets de memoria.
 
-> **Importante:** Antes de instalar, confirma que esta compilación corresponde exactamente a tu modelo de ATS Mini y a la revisión de hardware. Una imagen incompatible puede dejar el dispositivo inutilizable. Conserva una copia del firmware actual si es posible.
+## Descripción general
 
-## Contenido
+Este repositorio reúne los archivos necesarios para actualizar o restaurar el firmware de un ATS Mini. Incluye los binarios principales y la información de offsets para escribirlos en la flash del dispositivo de forma segura.
 
-| Archivo | Descripción | Offset de flash |
-|---|---|---:|
-| `ATSMINI/bootloader.bin` | Cargador de arranque | `0x0` |
-| `ATSMINI/partitions.bin` | Tabla de particiones | `0x8000` |
-| `ATSMINI/boot_app0.bin` | Aplicación de arranque | `0xE000` |
+> Advertencia: los archivos de firmware deben ser compatibles con tu modelo y revisión exacta del hardware. Un firmware incorrecto puede dejar el dispositivo inutilizable o requerir procedimientos de recuperación manual.
+
+## Contenido del repositorio
+
+```text
+ATSMINI/
+├── FLASH-OFFSETS.txt
+├── boot_app0.bin
+├── bootloader.bin
+├── firmware.bin
+├── partitions.bin
+README.md
+```
+
+## Archivos principales
+
+| Archivo | Descripción | Offset |
+| --- | --- | ---: |
+| `ATSMINI/bootloader.bin` | Cargador de arranque | `0x00000` |
+| `ATSMINI/partitions.bin` | Tabla de particiones | `0x08000` |
+| `ATSMINI/boot_app0.bin` | Imagen de arranque | `0x0E000` |
 | `ATSMINI/firmware.bin` | Firmware principal | `0x10000` |
-| `ATSMINI/FLASH-OFFSETS.txt` | Lista de archivos y offsets | — |
+| `ATSMINI/FLASH-OFFSETS.txt` | Instrucciones rápidas y offsets | — |
 
 ## Requisitos
 
-- Un ATS Mini compatible con esta compilación.
-- Un cable USB de datos y el puerto serie correspondiente.
-- [esptool](https://github.com/espressif/esptool) instalado.
-- El controlador USB/serie necesario para tu sistema operativo.
+- ATS Mini compatible con esta imagen.
+- Cable USB de datos.
+- Puerto serie disponible en tu sistema.
+- Python 3.x instalado.
+- `esptool` instalado:
 
-## Instalación
+```bash
+python -m pip install esptool
+```
 
-1. Descarga o clona este repositorio y abre una terminal en su directorio raíz.
-2. Verifica la compatibilidad del firmware con tu modelo y revisión de hardware.
-3. Conecta el dispositivo y determina el puerto serie (`COMx` en Windows o `/dev/tty...` en Linux/macOS).
-4. Graba los archivos usando los offsets indicados. Con una versión actual de `esptool`, el comando tiene este formato:
+## Procedimiento de flasheo
 
-   ```bash
-   python -m esptool --port <PUERTO> write-flash \
-     0x0 ATSMINI/bootloader.bin \
-     0x8000 ATSMINI/partitions.bin \
-     0xE000 ATSMINI/boot_app0.bin \
-     0x10000 ATSMINI/firmware.bin
-   ```
+1. Clona o descarga el repositorio.
+2. Conecta el ATS Mini al equipo y identifica el puerto serial.
+3. En Windows puede ser `COMx`; en Linux/macOS suele ser `/dev/ttyUSB0`, `/dev/ttyACM0` o similar.
+4. Ejecuta el siguiente comando desde la raíz del proyecto:
 
-   Sustituye `<PUERTO>` por el puerto real. La sintaxis puede variar entre versiones de esptool; consulta `python -m esptool --help` si el comando no coincide con tu versión. No uses opciones para borrar la flash completa salvo que las instrucciones específicas de tu dispositivo lo indiquen.
-5. Reinicia el dispositivo y comprueba su funcionamiento.
+```bash
+python -m esptool --port <PUERTO> write-flash \
+  0x00000 ATSMINI/bootloader.bin \
+  0x08000 ATSMINI/partitions.bin \
+  0x0E000 ATSMINI/boot_app0.bin \
+  0x10000 ATSMINI/firmware.bin
+```
 
-## Compatibilidad y versión
+Reemplaza `<PUERTO>` con el puerto real del dispositivo.
 
-La información disponible en este repositorio no especifica todavía el modelo/revisión exactos de hardware, la versión del firmware ni el procedimiento de recuperación. Confirma esos datos con el autor antes de instalar en un dispositivo de uso crítico.
+## Verificación
 
-## Contribuciones y soporte
+Después del flasheo:
 
-Para reportar un problema, incluye el modelo y revisión del dispositivo, sistema operativo, versión de esptool, puerto utilizado y el mensaje de error completo. No publiques números de serie, credenciales ni otros datos privados.
+- desconecta y vuelve a conectar el equipo,
+- observa si el ATS Mini enciende correctamente,
+- comprueba que la funcionalidad esperada responde como se espera,
+- si aparece un problema, revisa el puerto, la compatibilidad del firmware y el procedimiento de instalación.
 
-## Licencia
+## Seguridad y advertencias
 
-No se ha especificado una licencia. Hasta que se añada una, no se debe asumir que el firmware puede redistribuirse, modificarse o reutilizarse libremente.
+- No flashees un firmware que no hayas verificado como compatible.
+- Asegúrate de contar con una copia de seguridad si el equipo ya tiene configuración crítica.
+- No compartas información sensible, seriales ni credenciales durante el diagnóstico.
+- Este repositorio no incluye documentación de hardware completa ni instrucciones oficiales del fabricante; usa la información con precaución.
+
+## Soporte
+
+Si deseas reportar un problema o pedir ayuda:
+
+- incluye el modelo exacto del ATS Mini,
+- indica la versión del firmware,
+- menciona el sistema operativo,
+- comparte el puerto serial usado,
+- adjunta el mensaje de error completo.
+
+## Nota legal
+
+No se ha especificado una licencia para este repositorio. Antes de reutilizar, redistribuir o publicar este firmware, confirma con el propietario o con el autor original si se permite su uso y distribución.
+
+## Estado del proyecto
+
+El repositorio está preparado para almacenamiento y distribución de firmware, con una documentación básica para flasheo y uso. Si deseas, puede ampliarse con:
+
+- una guía detallada de instalación,
+- una sección de troubleshooting,
+- un changelog,
+- y un diseño visual más premium para GitHub.

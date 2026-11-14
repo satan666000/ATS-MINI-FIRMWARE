@@ -1,0 +1,25 @@
+# .gitignore
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Local environment files
+.env
+.env.*
+
+# Misc
+*.tmp
+*.bak
