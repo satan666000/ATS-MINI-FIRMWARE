@@ -6,6 +6,8 @@
 
 This guide documents the recommended procedure for writing the ATS Mini firmware image to device flash safely and reproducibly.
 
+> **Warning:** confirm the exact hardware revision and back up the original firmware before flashing. An incompatible image can make the device unusable.
+
 ### Flash offsets summary
 
 ```text
@@ -73,6 +75,8 @@ Firmware flashing is a sensitive operation. If you are not certain that the devi
 ## Español
 
 Esta guía describe el procedimiento recomendado para escribir el firmware del ATS Mini en la memoria flash de forma segura y reproducible.
+
+> **Advertencia:** confirma la revisión exacta del hardware y guarda una copia del firmware original antes de flashear. Una imagen incompatible puede dejar el dispositivo inutilizable.
 
 ### Resumen de direcciones
 
