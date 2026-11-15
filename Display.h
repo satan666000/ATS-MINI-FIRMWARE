@@ -36,13 +36,12 @@ wait();
 const auto& cfg = config();
 for(int8_t pin : cfg.pin_data)
 {
-// LCD_CAM's OEN ignores GPIO_ENABLE until control is returned to GPIO.
-gpio_ll_set_output_enable_ctrl(&GPIO, pin, false, false);
-gpio_ll_output_disable(&GPIO, pin);
+// The ESP32-S3 HAL routes the pin back to GPIO when output is disabled.
+gpio_ll_output_disable(&GPIO, static_cast<gpio_num_t>(pin));
 }
-gpio_ll_set_level(&GPIO, cfg.pin_rs, 1);
+gpio_ll_set_level(&GPIO, static_cast<gpio_num_t>(cfg.pin_rs), 1);
 esp_rom_gpio_connect_out_signal(cfg.pin_rs, SIG_GPIO_OUT_IDX, false, false);
-gpio_ll_set_level(&GPIO, cfg.pin_rd, 0);
+gpio_ll_set_level(&GPIO, static_cast<gpio_num_t>(cfg.pin_rd), 0);
 }
 };
 #endif

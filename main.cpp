@@ -596,7 +596,8 @@ void drawStartup(uint32_t elapsed){
  centered(129,"Iniciando radio...",0xBDF7);
  // Presentation timeline, not a claimed hardware initialization percentage.
  ui.drawRoundRect(40,144,240,7,3,dim);
- int fill=int(min(elapsed,6000UL)*234UL/6000UL);
+ uint32_t boundedElapsed=elapsed<6000U?elapsed:6000U;
+ int fill=int(boundedElapsed*234U/6000U);
  if(fill>0)ui.fillRect(43,146,fill,3,cyan);
  // Orbiting light along the bottom border.
  int comet=22+(frame*4)%276;

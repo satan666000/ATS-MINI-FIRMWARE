@@ -1,14 +1,16 @@
 KALIMAN - KO6EAI
-Para ATS Mini SI4732 ESP32-S3 con interruptor y auriculares.
-No instalar en otras variantes sin comprobar compatibilidad.
-Guardar primero una copia completa del firmware original.
+For ATS Mini SI4732 ESP32-S3 units with the specified switch and headphone hardware.
+Do not install on other variants without confirming compatibility.
+Back up the original firmware before flashing.
 
-Este paquete usa huge_app.csv y NO habilita actualizaciones OTA.
-firmware.bin es solo la aplicación; no es una copia completa de la memoria.
-FLASH-OFFSETS.txt indica las posiciones de los cuatro archivos para recuperación USB.
-SHA256SUMS.txt permite comprobar integridad, no es una firma digital.
-La compilación de GitHub es independiente de Schematik: probar el paquete
-por USB en el equipo correcto antes de recomendarlo a otras personas.
-Publicar una Release NO instala nada automáticamente en el radio.
-Conservar las licencias y avisos de las dependencias y del parche SSB.
-El parche SSB tiene un aviso de restricción de redistribución comercial.
+This package uses huge_app.csv and does not enable OTA updates.
+firmware.bin contains the application only; it is not a full flash backup.
+FLASH-OFFSETS.txt lists the four USB recovery flash offsets.
+SHA256SUMS.txt verifies file integrity; it is not a digital signature.
+GitHub Actions builds and packages the firmware. It does not configure or deploy
+to Schematik, and publishing a GitHub Release does not install firmware on a radio.
+Configure Schematik separately to use this repository's main branch if it should
+receive source updates. Verify the resulting build on compatible hardware before
+recommending it to others.
+Preserve all dependency and SSB patch license notices. The SSB patch has a
+commercial redistribution restriction.
