@@ -76,6 +76,8 @@ const uint16_t cbFrequencies[]={
  27315,27325,27335,27345,27355,27365,27375,27385,27395,27405
 };
 int cbChannel(uint16_t frequency){
+ if(frequency<=cbFrequencies[0])return 0;
+ if(frequency>=cbFrequencies[39])return 39;
  int best=0;
  for(int i=1;i<40;i++)
   if(abs(int(frequency)-int(cbFrequencies[i]))<abs(int(frequency)-int(cbFrequencies[best])))best=i;

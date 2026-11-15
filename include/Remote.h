@@ -11,7 +11,14 @@ char remoteKey[9]={};
 struct RemoteCommand {char text[80];};
 const char* executeRemote(const char* text);
 void statusJson(char* out,size_t size){
- snprintf(out,size,"{\"band\":%u,\"frequency\":%u,\"mode\":%u,\"volume\":%u,\"mute\":%u,\"rssi\":%u,\"snr\":%u,\"channel\":%d,\"bfo\":%d,\"squelch\":%u,\"squelch_closed\":%u,\"squelch_mode\":%u,\"squelch_threshold\":%u,\"auto_vfo_enabled\":%u,\"auto_vfo_active\":%u}",band,frequencies[band],mode,volume,muted,rssi,snr,band==CB_BAND?cbChannel(frequencies[band])+1:0,bfo,squelch,squelchClosed,squelchMode,squelchMode==2?autoSquelchThreshold:squelch,afcEnabled,autoVfoActive());
+ if(!out||size==0)return;
+ const uint8_t safeBand=band<BAND_COUNT?band:0;
+ const uint8_t safeMode=(safeBand==0||safeBand==CB_BAND)?0:(mode<=2?mode:0);
+ const uint16_t safeFrequency = safeBand<BAND_COUNT ? frequencies[safeBand] : bands[0].initial;
+ const uint16_t safeChannel = safeBand==CB_BAND ? cbChannel(safeFrequency)+1 : 0;
+ snprintf(out,size,
+   "{\"band\":%u,\"frequency\":%u,\"mode\":%u,\"volume\":%u,\"mute\":%u,\"rssi\":%u,\"snr\":%u,\"channel\":%d,\"bfo\":%d,\"squelch\":%u,\"squelch_closed\":%u,\"squelch_mode\":%u,\"squelch_threshold\":%u,\"auto_vfo_enabled\":%u,\"auto_vfo_active\":%u}",
+   safeBand,safeFrequency,safeMode,volume,muted,rssi,snr,safeChannel,bfo,squelch,squelchClosed,squelchMode,squelchMode==2?autoSquelchThreshold:squelch,afcEnabled,autoVfoActive());
 }
 class RemoteWrites:public NimBLECharacteristicCallbacks{
  void onWrite(NimBLECharacteristic* c,NimBLEConnInfo&) override{

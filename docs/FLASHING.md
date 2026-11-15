@@ -1,8 +1,8 @@
-# Guía de flasheo para ATS Mini
+# Professional flashing guide for ATS Mini
 
-Esta documentación ofrece una referencia rápida para escribir los archivos del firmware del ATS Mini en la memoria flash.
+This guide documents the recommended procedure for writing the ATS Mini firmware image to the device flash safely and reproducibly.
 
-## Resumen de offsets
+## Flash offsets summary
 
 ```text
 0x00000  bootloader.bin
@@ -11,44 +11,57 @@ Esta documentación ofrece una referencia rápida para escribir los archivos del
 0x10000  firmware.bin
 ```
 
-## Requisitos
+## Prerequisites
 
 - Python 3.x
-- esptool instalado
-- Puerto serial disponible
-- ATS Mini conectado en modo de programación o mediante el método indicado por tu hardware
+- [esptool](https://github.com/espressif/esptool) installed
+- An available serial port
+- ATS Mini connected correctly and in programming mode
+- Backup of the original firmware if the device contains important configuration or user data
 
-## Instalación
+## Install esptool
 
 ```bash
 python -m pip install esptool
 ```
 
+## Flashing procedure
+
+Run the following from the repository root:
+
 ```bash
-python -m esptool --port <PUERTO> write-flash \
+python -m esptool --port <PORT> write-flash \
   0x00000 ATSMINI/bootloader.bin \
   0x08000 ATSMINI/partitions.bin \
   0x0E000 ATSMINI/boot_app0.bin \
   0x10000 ATSMINI/firmware.bin
 ```
 
-## Consideraciones importantes
+Replace `<PORT>` with the actual serial port on your system (`COMx` on Windows or `/dev/tty...` on Linux/macOS).
 
-- Verifica el modelo del hardware antes de flashear.
-- Una imagen incorrecta puede inutilizar el dispositivo.
-- Si el proceso falla, revisa el puerto, el cable y la compatibilidad del archivo.
-- Mantén una copia del firmware anterior si es posible.
+## Important considerations
 
-## Diagnóstico rápido
+- Verify hardware compatibility before beginning.
+- An incorrect or incompatible firmware image may render the device unusable.
+- Do not erase the full flash unless the hardware-specific documentation explicitly allows it.
+- Keep a backup of the prior state whenever possible.
 
-Si la transferencia falla:
+## Quick troubleshooting
 
-1. comprueba el puerto serial,
-2. prueba otro cable USB,
-3. verifica la versión de `esptool`,
-4. revisa que el archivo sea el correcto para tu dispositivo.
+If the flashing process fails:
 
-## Referencias
+1. Check the serial port and USB cable.
+2. Try another port or a different data cable.
+3. Verify the installed `esptool` version.
+4. Confirm that the files match your device and revision.
+5. Ensure the device is entering programming mode correctly.
 
-- Archivo principal del repositorio: `README.md`
-- Offsets detallados: `ATSMINI/FLASH-OFFSETS.txt`
+## References
+
+- Main project README: `../README.md`
+- Detailed offsets: `ATSMINI/FLASH-OFFSETS.txt`
+- Firmware source: `main.cpp`
+
+## Safety note
+
+Firmware flashing is a sensitive operation. If you are not certain that the device and image are compatible, do not proceed until that compatibility has been verified.
