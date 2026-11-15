@@ -1,9 +1,14 @@
 ; Configuración independiente para GitHub Actions; no cambia Deploy en Schematik.
+[platformio]
+src_dir = .
+
 [env:ats-mini]
 platform = espressif32@6.12.0
 board = esp32-s3-devkitc-1
 framework = arduino
 board_build.partitions = huge_app.csv
+build_src_filter =
+    +<main.cpp>
 build_flags =
     -D ARDUINO_USB_MODE=1
     -D ARDUINO_USB_CDC_ON_BOOT=1
