@@ -14,11 +14,10 @@ void statusJson(char* out,size_t size){
  if(!out||size==0)return;
  const uint8_t safeBand=band<BAND_COUNT?band:0;
  const uint8_t safeMode=(safeBand==0||safeBand==CB_BAND)?0:(mode<=2?mode:0);
- const uint16_t safeFrequency = safeBand<BAND_COUNT ? frequencies[safeBand] : bands[0].initial;
- const uint16_t safeChannel = safeBand==CB_BAND ? cbChannel(safeFrequency)+1 : 0;
- snprintf(out,size,
-   "{\"band\":%u,\"frequency\":%u,\"mode\":%u,\"volume\":%u,\"mute\":%u,\"rssi\":%u,\"snr\":%u,\"channel\":%d,\"bfo\":%d,\"squelch\":%u,\"squelch_closed\":%u,\"squelch_mode\":%u,\"squelch_threshold\":%u,\"auto_vfo_enabled\":%u,\"auto_vfo_active\":%u}",
-   safeBand,safeFrequency,safeMode,volume,muted,rssi,snr,safeChannel,bfo,squelch,squelchClosed,squelchMode,squelchMode==2?autoSquelchThreshold:squelch,afcEnabled,autoVfoActive());
+ const uint16_t safeFrequency=frequencies[safeBand];
+ const int safeChannel=safeBand==CB_BAND?cbChannel(safeFrequency)+1:0;
+ const bool safeAutoVfo=safeBand!=0&&safeBand!=CB_BAND&&safeMode!=0&&patchLoaded&&afcEnabled;
+ snprintf(out,size,"{\"band\":%u,\"frequency\":%u,\"mode\":%u,\"volume\":%u,\"mute\":%u,\"rssi\":%u,\"snr\":%u,\"channel\":%d,\"bfo\":%d,\"squelch\":%u,\"squelch_closed\":%u,\"squelch_mode\":%u,\"squelch_threshold\":%u,\"auto_vfo_enabled\":%u,\"auto_vfo_active\":%u}",safeBand,safeFrequency,safeMode,volume,muted,rssi,snr,safeChannel,bfo,squelch,squelchClosed,squelchMode,squelchMode==2?autoSquelchThreshold:squelch,afcEnabled,safeAutoVfo);
 }
 class RemoteWrites:public NimBLECharacteristicCallbacks{
  void onWrite(NimBLECharacteristic* c,NimBLEConnInfo&) override{
@@ -53,6 +52,8 @@ void toggleBle(){
   bleStatus=svc->createCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e",NIMBLE_PROPERTY::READ|NIMBLE_PROPERTY::NOTIFY,384);
   svc->start();auto adv=NimBLEDevice::getAdvertising();adv->setName("ATS-MINI");adv->addServiceUUID(svc->getUUID());bleInitialized=true;
  }
+ // Never replay commands queued before this control session was toggled.
+ xQueueReset(commands);
  bleEnabled=!bleEnabled;
  if(bleEnabled)NimBLEDevice::getAdvertising()->start();else{NimBLEDevice::getAdvertising()->stop();auto server=NimBLEDevice::getServer();for(auto h:server->getPeerDevices())server->disconnect(h);}
  dirty=true;
