@@ -48,6 +48,7 @@ This repository contains the binary assets required to restore, update, or repai
 │   └── Remote.h
 └── .github/
     └── workflows/
+        └── firmware.yml
 ```
 
 ## Firmware files
@@ -89,6 +90,12 @@ python -m esptool --port <PORT> write-flash \
 Replace `<PORT>` with the actual device port. Command syntax may vary slightly depending on the installed `esptool` version; consult `python -m esptool --help` if needed.
 
 Do not erase the entire flash unless the device-specific documentation explicitly instructs you to do so. For an expanded procedure, see [`docs/FLASHING.md`](docs/FLASHING.md). The exact offsets are also listed in [`ATSMINI/FLASH-OFFSETS.txt`](ATSMINI/FLASH-OFFSETS.txt).
+
+## Build and Schematik sync
+
+GitHub Actions builds the firmware for pushes and pull requests. Versioned releases are built only from `X.Y.Z` tags that match `FIRMWARE_VERSION` in `main.cpp`.
+
+Schematik is an external service and is not configured by this repository. To have it receive source updates, configure its project to use this GitHub repository and the `main` branch. Changes on feature branches are not available to that deployment until merged into `main`. The GitHub workflow builds and publishes files; it does not deploy to Schematik or flash a radio.
 
 ## Safety and compatibility
 
