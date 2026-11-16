@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <esp_system.h>
 #include <math.h>
 #include <errno.h>
 #include <ctype.h>
@@ -12,8 +13,9 @@ LGFX screen;
 LGFX_Sprite ui(&screen);
 SI4735 radio;
 Preferences prefs;
+bool startupAbductCow=true;
 constexpr const char* FIRMWARE_NAME="KALIMAN";
-constexpr const char* FIRMWARE_VERSION="1.1.30";
+constexpr const char* FIRMWARE_VERSION="1.1.42";
 constexpr const char* FIRMWARE_CREATOR="KO6EAI";
 constexpr int POWER=15, AMP=10, MUTE=3, RESET=16, SDA_PIN=18, SCL_PIN=17;
 constexpr int BL=38, ENC_A=2, ENC_B=1, BUTTON=21, BATTERY_PIN=4;
@@ -76,8 +78,6 @@ const uint16_t cbFrequencies[]={
  27315,27325,27335,27345,27355,27365,27375,27385,27395,27405
 };
 int cbChannel(uint16_t frequency){
- if(frequency<=cbFrequencies[0])return 0;
- if(frequency>=cbFrequencies[39])return 39;
  int best=0;
  for(int i=1;i<40;i++)
   if(abs(int(frequency)-int(cbFrequencies[i]))<abs(int(frequency)-int(cbFrequencies[best])))best=i;
@@ -117,14 +117,32 @@ void locateBandFolder(int id){
  for(int f=0;f<FOLDER_COUNT;f++)for(int i=0;i<folderSize(f);i++)
  if(folderBand(f,i)==id){folder=f;folderPosition=i;return;}
 }
-const char* hudNames[]={"Panel","Instrumentos","Contraste","Barras LED","Doble dial","Minimal","Consola","Escaner","Tarjetas","Ecualizador","Agujas","Telemetria","Waterfall","Semaforo","Radar","Termometros","Mosaico","Vu multicolor","Orbita","Diamantes","Escalera","Doble pista","Boombox retro"};
+// Keep legacy numeric IDs valid for saved preferences.
+const char* hudNames[]={"Estudio","Instrumental","Digital","Barras RF","Instrumental","Minimal","Estudio","Barras RF","Estudio","Barras RF","Instrumental","Digital","Estudio","Estudio","Instrumental","Barras RF","Digital","Digital","Instrumental","Digital","Barras RF","Barras RF","Barras RF","Instrumental","Instrumental","Digital","Diales","Columnas","Matriz RF"};
 constexpr int HUD_COUNT=sizeof(hudNames)/sizeof(hudNames[0]);
+constexpr uint8_t selectableHuds[]={0,1,2,5,3,26,27,28};
+constexpr int SELECTABLE_HUD_COUNT=sizeof(selectableHuds)/sizeof(selectableHuds[0]);
+uint8_t canonicalHud(uint8_t id){
+ switch(id){
+ case 0:case 1:case 2:case 3:case 5:case 26:case 27:case 28:return id;
+ case 4:case 10:case 14:case 18:case 23:case 24:return 1;
+ case 11:case 16:case 17:case 19:case 25:return 2;
+ case 7:case 9:case 15:case 20:case 21:case 22:return 3;
+ default:return 0;
+ }
+}
+uint8_t nextHud(uint8_t id,int direction){
+ id=canonicalHud(id);
+ for(int i=0;i<SELECTABLE_HUD_COUNT;i++)if(selectableHuds[i]==id)
+  return selectableHuds[(i+direction%SELECTABLE_HUD_COUNT+SELECTABLE_HUD_COUNT)%SELECTABLE_HUD_COUNT];
+ return 0;
+}
 const char* modes[]={"AM","LSB","USB"};
 const uint16_t amSteps[]={1,5,9,10,50,100};
 const uint16_t fmSteps[]={1,5,10,20,50,100};
 const char* amFilters[]={"6","4","3","2","1","1.8","2.5"};
 const char* ssbFilters[]={"1.2","2.2","3","4","0.5","1"};
-const char* items[]={"Banda","Modo","Paso","Volumen","Filtro AM/SSB","AGC automatico","Atenuacion","BFO fino","HUD","Silencio","Memoria","Guardar memoria","Cargar memoria","Volver","Tema","Region","AMP","Auto VFO / AFC","WiFi control","BLE control","Clave remota","Squelch modo","Squelch nivel","Informacion","Idioma","Buscar senal","Temporizador audio","Seleccion de modo"};
+const char* items[]={"Banda","Modo","Paso","Volumen","Filtro AM/SSB","AGC automatico","Atenuacion","BFO fino","HUD","Silencio","Memoria","Guardar memoria","Cargar memoria","Volver","Tema","Region","AMP","Auto VFO / AFC","","","","Squelch modo","Squelch nivel","Informacion","Idioma","Buscar senal","Temporizador audio","Seleccion de modo"};
 constexpr int ITEM_COUNT=sizeof(items)/sizeof(items[0]);
 // Stable setting IDs: grouping changes navigation, not stored settings.
 struct MenuGroup {const char* name; const char* hint; uint8_t ids[9]; uint8_t count;};
@@ -133,7 +151,6 @@ const MenuGroup menuGroups[]={
  {"Audio y recepcion","Volumen, filtros y silencio",{3,4,5,6,21,22,9,16,13},9},
  {"Memorias","Elegir, guardar o recuperar",{10,11,12,13},4},
  {"Pantalla","HUD, colores e idioma",{8,14,24,13},4},
- {"Conexiones","Control WiFi y Bluetooth BLE",{18,19,20,13},4},
  {"Sistema","Temporizador e informacion",{26,23,13},3}
 };
 constexpr int MENU_GROUP_COUNT=sizeof(menuGroups)/sizeof(menuGroups[0]);
@@ -247,52 +264,15 @@ void setAudioTimer(int minutes);
 bool turnFine(int d);
 int infoPage=0;
 uint16_t step();
-// Reception history, not microphone audio or an RF frequency spectrum.
-constexpr int WF_BINS=128, WF_ROWS=44;
-uint8_t waterfall[WF_ROWS][WF_BINS]={};
-bool waterfallPaused=false,sweepActive=false;
-uint8_t waterfallHead=0;
 bool settingsAvailable=false;
-constexpr int BOOMBOX_HUD=22, BOOMBOX_BARS=16;
-float boomboxLevel[BOOMBOX_BARS]={};
-uint8_t boomboxPeak[BOOMBOX_BARS]={},boomboxHold[BOOMBOX_BARS]={};
-bool boomboxView(){return hud==BOOMBOX_HUD;}
-bool waterfallView(){return hud==12;}
-bool signalHistoryView(){return waterfallView()||boomboxView();}
-void stopSweep(){sweepActive=false;}
-void clearWaterfall(){stopSweep();memset(waterfall,0,sizeof(waterfall));waterfallHead=0;memset(boomboxLevel,0,sizeof(boomboxLevel));memset(boomboxPeak,0,sizeof(boomboxPeak));memset(boomboxHold,0,sizeof(boomboxHold));dirty=true;}
+void resetHud(){dirty=true;}
 int item=0,encoderState=0,quarters=0;
 bool buttonRaw=true,buttonStable=true,buttonArmed=true;
 uint32_t buttonChange=0,pressedAt=0,lastSignal=0,saveAt=0;
 uint8_t rssi=0,snr=0;
 // Live receiver measurements, not microphone levels. Actual cadence also
 // depends on I2C transactions and screen drawing; unchanged values stay steady.
-constexpr uint32_t SIGNAL_POLL_MS=33;
-void pollWaterfall(uint32_t now){
- static uint32_t frameAt=0;
- if(!ready||!signalHistoryView()||menu||waterfallPaused||signalSearch||now-lastSignal>500||now-frameAt<(boomboxView()?33UL:100UL))return;
- frameAt=now;
- int strength=constrain(int(rssi),0,80),quality=constrain(int(snr),0,50)*80/50;
- if(waterfallView()){
-  waterfallHead=(waterfallHead+WF_ROWS-1)%WF_ROWS;
-  for(int k=0;k<WF_BINS;k++)waterfall[waterfallHead][k]=k<WF_BINS/2?strength:quality;
-  dirty=true;
- }
- if(boomboxView()){
-  bool changed=false;
-  for(int b=0;b<BOOMBOX_BARS;b++){
-   float target=(b<BOOMBOX_BARS/2?strength:quality)*12.0f/80;
-   int before=int(boomboxLevel[b]+0.5f),oldPeak=boomboxPeak[b];
-   boomboxLevel[b]+=(target-boomboxLevel[b])*(target>boomboxLevel[b]?0.37f:0.064f);
-   int level=int(boomboxLevel[b]+0.5f);
-   if(level>=boomboxPeak[b]){boomboxPeak[b]=level;boomboxHold[b]=36;}
-   else if(boomboxHold[b])boomboxHold[b]--;
-   else if(boomboxPeak[b]){boomboxPeak[b]--;boomboxHold[b]=6;}
-   if(before!=level||oldPeak!=boomboxPeak[b])changed=true;
-  }
-  if(changed)dirty=true;
- }
-}
+constexpr uint32_t SIGNAL_POLL_MS=100; // 10 real samples/s; avoid redundant I2C traffic.
 uint32_t lastBattery=0,lastDraw=0;
 int batteryMillivolts=0,batteryLevel=-1;
 bool externalPower=false;
@@ -320,7 +300,7 @@ uint16_t rdsScrollOffset=0;
 uint32_t rdsScrollAt=0;
 constexpr uint16_t RDS_TEXT_WIDTH=276;
 uint16_t rdsScrollWidth=0;
-uint8_t rdsNameSegments=0;
+uint8_t rdsNameSegments=0; // Next expected PS segment (0 through 3).
 char psBuffer[9]={},rtBuffer[65]={};
 uint16_t rtSegments=0;
 int8_t rtFlag=-1,rtVersion=-1;
@@ -331,7 +311,7 @@ void resetRds(){
  // A new frequency must not inherit a closed squelch from the old station.
  squelchClosed=false;autoSquelchThreshold=6;filterCandidate=255;lastFilterChange=millis();
  digitalWrite(MUTE,muted?HIGH:LOW);
- noiseFloorValid=false;squelchTuneAt=millis();clearWaterfall();rssi=0;snr=0;stereo=false;rdsName="";rdsText="";rdsScrollSource="";rdsScrollOffset=0;rdsScrollWidth=0;rdsScrollAt=millis()+400;rdsNameSegments=0;memset(psBuffer,0,sizeof(psBuffer));memset(rtBuffer,0,sizeof(rtBuffer));rtSegments=0;rtFlag=-1;rtVersion=-1;lastRdsSyncAt=0;rdsSync=false;if(band==0&&ready){radio.getRdsStatus(0,1,0);radio.RdsInit();}dirty=true;}
+ noiseFloorValid=false;squelchTuneAt=millis();resetHud();rssi=0;snr=0;stereo=false;rdsName="";rdsText="";rdsScrollSource="";rdsScrollOffset=0;rdsScrollWidth=0;rdsScrollAt=millis()+400;rdsNameSegments=0;memset(psBuffer,0,sizeof(psBuffer));memset(rtBuffer,0,sizeof(rtBuffer));rtSegments=0;rtFlag=-1;rtVersion=-1;lastRdsSyncAt=0;rdsSync=false;if(band==0&&ready){radio.getRdsStatus(0,1,0);radio.RdsInit();}dirty=true;}
 String notice;
 uint32_t noticeUntil=0;
 bool fineTuning(){return band!=0&&band!=CB_BAND&&mode!=0&&stepIndex>=6;}
@@ -348,7 +328,7 @@ void save(){
  prefs.putUChar("sqlmode",squelchMode);prefs.putUChar("sql",squelch);prefs.putBool("afc",afcEnabled);prefs.putBool("amp",ampEnabled);prefs.putUChar("theme",theme);prefs.putUChar("region",region);prefs.putShort("bfo",bfo);prefs.putBytes("freq",frequencies,sizeof(frequencies));saveAt=0;
 }
 void updateSquelch(uint32_t now){
- // Only use settled, normal reception samples, never waterfall measurements.
+ // Only use settled, normal reception samples.
  bool supported=band==0||mode==0;
  bool settled=now-squelchTuneAt>=500;
  if(squelchMode==2&&supported&&settled&&now-squelchSampleAt>=100){
@@ -372,7 +352,7 @@ void updateSquelch(uint32_t now){
 bool autoVfoActive(){return ready&&band!=0&&band!=CB_BAND&&mode!=0&&patchLoaded&&afcEnabled;}
 void audioSettings(){
  if(!ready)return;
- digitalWrite(AMP,ready&&ampEnabled&&!sweepActive?HIGH:LOW);
+ digitalWrite(AMP,ready&&ampEnabled?HIGH:LOW);
  digitalWrite(MUTE,(muted||squelchClosed)?HIGH:LOW);
  radio.setVolume(muted?0:volume);
  // FM must not inherit manual AM/SSB attenuation from a saved setting.
@@ -414,7 +394,7 @@ void selectBand(bool showLoading=true){
  if(band==CB_BAND){mode=0;bfo=0;frequencies[band]=cbFrequencies[cbChannel(frequencies[band])];}
  if(!ready)return;
  if((band==0||mode==0)&&stepIndex>5)stepIndex=2;
- stopSweep();
+ 
  digitalWrite(AMP,LOW);
  if(band==CB_BAND)frequencies[band]=cbFrequencies[cbChannel(frequencies[band])];
  const Band &b=bands[band];
@@ -441,7 +421,7 @@ void cancelSearch(){
 void startSearch(){
  if(!ready)return;
  if(band&&mode){message("Busqueda solo AM / FM");return;}
- stopSweep();waterfallPaused=true;
+ 
  // Search must not inherit an old station's closed squelch.
  squelchClosed=false;digitalWrite(MUTE,muted?HIGH:LOW);
  searchOriginal=frequencies[band];
@@ -470,7 +450,6 @@ void setAudioTimer(int minutes){
  audioTimerAt=audioTimerMinutes?millis()+uint32_t(audioTimerMinutes)*60000UL:0;
  dirty=true;
 }
-#include "Remote.h"
 String value(int n){
  switch(n){
  case 25:return signalSearch?"Buscando / pulsar cancela":"Pulsar: buscar AM / FM";
@@ -482,11 +461,8 @@ String value(int n){
  }
  case 24:return languageNames[language];
  case 23:return "Radio / Firmware / Version";
- case 18:return wifiEnabled?"SI / 192.168.4.1":"NO";
- case 19:return bleEnabled?"SI / ATS-MINI":"NO";
  case 21:return squelchMode==0?"Desactivado":squelchMode==1?"Manual / AM-FM":"Automatico / AM-FM";
  case 22:return squelchMode==2?String(autoSquelchThreshold)+" dBuV / auto":String(squelch)+" dBuV / manual";
- case 20:return remoteKey;
  case 0:return bands[band].name;
  case 1:return band==CB_BAND?"AM / fijo":band==0?"FM":String(automaticMode?"Auto / ":"Manual / ")+modes[mode];
  case 2:if(band==CB_BAND)return "1 canal (1-40)";if(fineTuning())return String(fineStepHz())+" Hz / BFO";return String(band==0?step()*10:step())+" kHz";
@@ -512,18 +488,19 @@ String frequencyText(uint16_t f){
  return String(text);
 }
 // Small vector symbols: no font glyph dependency or image buffers.
-enum MenuIcon { ANTENNA, AUDIO, MEMORY, SCREEN, WIFI, GEAR, BACK, FILTER,
-                STEP, ICON_MUTE, SAVE, LOAD, KEY, INFO, CLOCK, LANGUAGE, SEARCH, THEME, BLE };
+enum MenuIcon { ANTENNA, AUDIO, MEMORY, SCREEN, GEAR, BACK, FILTER,
+                STEP, ICON_MUTE, SAVE, LOAD, INFO, CLOCK, LANGUAGE, SEARCH, THEME };
 MenuIcon itemIcon(int id){
  static const MenuIcon icons[]={ANTENNA,ANTENNA,STEP,AUDIO,FILTER,GEAR,FILTER,
  STEP,SCREEN,ICON_MUTE,MEMORY,SAVE,LOAD,BACK,THEME,LANGUAGE,AUDIO,ANTENNA,
- WIFI,BLE,KEY,FILTER,FILTER,INFO,LANGUAGE,SEARCH,CLOCK,ANTENNA};
+ GEAR,GEAR,GEAR,FILTER,FILTER,INFO,LANGUAGE,SEARCH,CLOCK,ANTENNA};
  static_assert(sizeof(icons)/sizeof(icons[0])==ITEM_COUNT,"Cada ajuste necesita un icono");
  return id>=0&&id<ITEM_COUNT?icons[id]:GEAR;
 }
 // Time-based gentle breathing: no catch-up frames or extra buffers.
 uint8_t animationFrame=0;
 uint32_t lastAnimation=0;
+constexpr uint8_t pulseLevels[32]={7,6,6,6,5,5,4,4,3,2,2,1,1,0,0,0,0,0,0,0,1,1,2,2,3,4,4,5,5,6,6,6};
 uint16_t visualBlend(uint16_t a,uint16_t b,int mix){
  mix=constrain(mix,0,31);int inv=31-mix;
  return (((((a>>11)&31)*inv+((b>>11)&31)*mix)/31)<<11)|
@@ -531,7 +508,7 @@ uint16_t visualBlend(uint16_t a,uint16_t b,int mix){
         (((a&31)*inv+(b&31)*mix)/31);
 }
 uint16_t iconPulse(uint16_t color){
- int scale=24+int(7.0f*(0.5f+0.5f*cosf(animationFrame*6.2831853f/32.0f)));
+ int scale=24+pulseLevels[animationFrame];
  return visualBlend(0,color,scale);
 }
 void menuIcon(int x,int y,MenuIcon kind,uint16_t c){
@@ -550,12 +527,9 @@ void menuIcon(int x,int y,MenuIcon kind,uint16_t c){
   if(kind==MEMORY)ui.drawRect(x+5,y+9,6,4,c);
   else{int a=kind==SAVE?8:12,b=kind==SAVE?12:8;line(8,a,8,b);line(5,b+(kind==SAVE?-3:3),8,b);line(11,b+(kind==SAVE?-3:3),8,b);}break;
  case SCREEN:ui.drawRect(x+1,y+2,14,10,c);line(8,12,8,15);line(4,15,12,15);break;
- case WIFI:line(1,5,4,2);line(4,2,12,2);line(12,2,15,5);line(4,8,6,6);line(6,6,10,6);line(10,6,12,8);ui.fillCircle(x+8,y+12,1,c);break;
- case BLE:line(7,1,7,15);line(7,1,12,5);line(12,5,3,12);line(3,4,12,11);line(12,11,7,15);break;
  case BACK:line(2,8,14,8);line(2,8,7,3);line(2,8,7,13);break;
  case FILTER:for(int i=0;i<3;i++){line(3+i*5,2,3+i*5,14);ui.drawRect(x+1+i*5,y+4+i*3,5,3,c);}break;
  case STEP:line(1,13,5,13);line(5,13,5,9);line(5,9,10,9);line(10,9,10,4);line(10,4,15,4);break;
- case KEY:ui.drawCircle(x+5,y+5,3,c);line(7,7,14,14);line(10,10,12,8);line(12,12,14,10);break;
  case INFO:ui.drawCircle(x+8,y+8,7,c);ui.fillCircle(x+8,y+4,1,c);line(8,7,8,12);break;
  case CLOCK:ui.drawCircle(x+8,y+8,7,c);line(8,3,8,8);line(8,8,12,10);break;
  case LANGUAGE:ui.drawCircle(x+8,y+8,7,c);ui.drawEllipse(x+8,y+8,3,7,c);line(1,8,15,8);break;
@@ -563,6 +537,36 @@ void menuIcon(int x,int y,MenuIcon kind,uint16_t c){
  case THEME:ui.drawCircle(x+8,y+8,7,c);ui.fillCircle(x+5,y+5,1,c);ui.fillCircle(x+11,y+5,1,c);ui.fillCircle(x+4,y+10,1,c);ui.fillCircle(x+10,y+11,2,c);break;
  default:ui.drawCircle(x+8,y+8,4,c);for(int i=2;i<=14;i+=6){line(i,1,i,3);line(i,13,i,15);line(1,i,3,i);line(13,i,15,i);}break;
  }
+}
+// Text must remain readable on both the background and the instrument panels.
+// Keep the requested hue where possible; only text is adjusted, never graphics.
+bool themedText=false;
+float textLuminance(uint16_t color){
+ auto linear=[](float channel){return channel<=0.04045f?channel/12.92f:powf((channel+0.055f)/1.055f,2.4f);};
+ return 0.2126f*linear(((color>>11)&31)/31.0f)
+       +0.7152f*linear(((color>>5)&63)/63.0f)
+       +0.0722f*linear((color&31)/31.0f);
+}
+uint16_t readableText(uint16_t color){
+ if(!themedText)return color; // The welcome screen has its own fixed palette.
+ const Palette &p=palettes[theme];
+ float background=textLuminance(p.background),panel=textLuminance(p.panel);
+ auto contrast=[&](uint16_t candidate){
+  float light=textLuminance(candidate);
+  float a=(max(light,background)+0.05f)/(min(light,background)+0.05f);
+  float b=(max(light,panel)+0.05f)/(min(light,panel)+0.05f);
+  return min(a,b);
+ };
+ if(contrast(color)>=4.5f)return color;
+ uint16_t endpoint=contrast(0xFFFF)>contrast(0)?0xFFFF:0;
+ // Find the smallest blend that reaches readable small-text contrast.
+ int low=1,high=31;
+ while(low<high){
+  int middle=(low+high)/2;
+  if(contrast(visualBlend(color,endpoint,middle))>=4.5f)high=middle;
+  else low=middle+1;
+ }
+ return visualBlend(color,endpoint,low);
 }
 // Fit each text into its own cell, using actual font metrics.
 void textCell(int x,int y,int width,const String &original,uint16_t color,uint8_t size=1,bool center=true){
@@ -574,7 +578,7 @@ void textCell(int x,int y,int width,const String &original,uint16_t color,uint8_
   while(fitted.length()&&ui.textWidth(fitted+"...")>width)fitted.remove(fitted.length()-1);
   fitted+="...";
  }
- ui.setTextColor(color);
+ ui.setTextColor(readableText(color));
  ui.setCursor(x+(center?max(0,(width-int(ui.textWidth(fitted)))/2):0),y);
  ui.print(fitted);
 }
@@ -587,6 +591,7 @@ void centered(int y,const String &text,uint16_t color,uint8_t size=1){
 // Six-second presentation, rendered in the existing sprite. All effects
 // are decorative: neither the bars nor the timeline report RF or load progress.
 void drawStartup(uint32_t elapsed){
+ themedText=false;
  const uint16_t bg=0x0843,dim=0x2949,cyan=0x07FF,violet=0xB81F,white=0xFFFF;
  const uint32_t frame=elapsed/33;
  const float phase=elapsed*0.0035f;
@@ -614,6 +619,49 @@ void drawStartup(uint32_t elapsed){
   ui.drawLine(160+r,23,163+r,30,color);
   ui.drawLine(163+r,30,163+r,39,color);
  }
+ // Persistent three-boot cycle: first welcome abducts, then two fly-bys.
+ // Everything stays in the free space beside the antenna, with no extra delay.
+ if(elapsed>=700UL && elapsed<=5200UL){
+  int x=-18+int((elapsed-700UL)*356UL/4500UL);
+  int y=15+int(2.0f*sinf((elapsed-700UL)*0.004f));
+  if(startupAbductCow){
+   if(elapsed<2100UL)x=-18+int((elapsed-700UL)*130UL/1400UL);
+   else if(elapsed<3900UL)x=112;
+   else x=112+int((elapsed-3900UL)*226UL/1300UL);
+   y=15;
+   // Narrow tractor beam: never covers titles or the central antenna.
+   if(elapsed>=2100UL && elapsed<3750UL){
+    uint16_t beam=visualBlend(bg,cyan,25+int(8*sinf(phase)));
+    ui.fillTriangle(112,22,101,49,123,49,beam);
+    ui.drawLine(112,22,101,49,cyan);
+    ui.drawLine(112,22,123,49,cyan);
+   }
+   if(elapsed<3600UL){
+    int lift=elapsed>2400UL?int((elapsed-2400UL)*27UL/1200UL):0;
+    int cy=42-lift;
+    // Small white cow: dark patches, muzzle, horns, legs and tail.
+    ui.fillRoundRect(105,cy,13,7,2,white);
+    ui.fillRect(108,cy+1,3,3,dim);
+    ui.fillRect(114,cy+3,3,3,dim);
+    ui.fillRect(107,cy+7,2,3,white);
+    ui.fillRect(115,cy+7,2,3,white);
+    ui.fillRect(117,cy-2,5,6,white);
+    ui.fillRect(119,cy+2,4,2,0xFBB7);
+    ui.drawPixel(120,cy-1,dim);
+    ui.drawPixel(117,cy-3,white);ui.drawPixel(121,cy-3,white);
+    ui.drawLine(104,cy+2,102,cy-1,white);
+   }
+  }
+  ui.drawFastHLine(x-22,y,7,dim);
+  ui.drawFastHLine(x-18,y+2,5,violet);
+  ui.fillCircle(x,y-4,5,cyan);
+  ui.fillCircle(x-1,y-5,2,white);
+  ui.fillRoundRect(x-12,y-2,25,6,3,0xBDF7);
+  ui.drawFastHLine(x-9,y-2,19,white);
+  ui.drawFastHLine(x-7,y+4,15,violet);
+  for(int lamp=0;lamp<3;lamp++)
+   ui.fillCircle(x-7+lamp*7,y+1,1,((frame/3+lamp)%3==0)?cyan:violet);
+ }
  // Symmetrical animated mini equalizers, explicitly decorative.
  for(int i=0;i<7;i++){
   int h=5+int(10.0f*(1.0f+sinf(phase+i*0.65f)));
@@ -626,8 +674,7 @@ void drawStartup(uint32_t elapsed){
  centered(129,"Iniciando radio...",0xBDF7);
  // Presentation timeline, not a claimed hardware initialization percentage.
  ui.drawRoundRect(40,144,240,7,3,dim);
- uint32_t boundedElapsed=elapsed<6000U?elapsed:6000U;
- int fill=int(boundedElapsed*234U/6000U);
+ int fill=int(min(elapsed,6000UL)*234UL/6000UL);
  if(fill>0)ui.fillRect(43,146,fill,3,cyan);
  // Orbiting light along the bottom border.
  int comet=22+int(elapsed*100UL/1000UL)%276;
@@ -637,6 +684,7 @@ void drawStartup(uint32_t elapsed){
 }
 // All HUDs share bounded header, tuning, instruments and status areas.
 void draw(){
+ themedText=true;
  const Palette &colors=palettes[theme];
  uint16_t bg=colors.background,panel=colors.panel,accent=colors.accent;
  uint16_t white=menuColor(1,colors.text),dim=menuColor(5,colors.dim);
@@ -748,7 +796,7 @@ void draw(){
      else snprintf(range,sizeof(range),"%.3f - %.3f MHz",bands[idx].lo/1000.0,bands[idx].hi/1000.0);
      label(42,y+19,range,dim);
     }else if(menuRoot){
-     const MenuIcon groupIcons[]={ANTENNA,AUDIO,MEMORY,SCREEN,WIFI,GEAR};
+     const MenuIcon groupIcons[]={ANTENNA,AUDIO,MEMORY,SCREEN,GEAR};
      menuIcon(19,y+8,n==MENU_GROUP_COUNT?BACK:groupIcons[n],selected?accent:dim);
      label(42,y+5,n==MENU_GROUP_COUNT?"< Volver":menuGroups[n].name,entryColor);
      label(42,y+19,n==MENU_GROUP_COUNT?"Pulsar para regresar":menuGroups[n].hint,dim);
@@ -761,167 +809,100 @@ void draw(){
    }
    ui.fillRoundRect(313,43,3,102,1,panel);ui.fillRoundRect(313,43+pos*94/max(1,count-1),3,8,1,accent);
   }
- }else if(boomboxView()){
-  centered(25,"BOOMBOX / "+frequencyText(frequencies[band])+" MHz",accent);
-  ui.fillRoundRect(8,39,304,90,5,panel);
-  ui.drawRoundRect(8,39,304,90,5,dim);
-  for(int b=0;b<BOOMBOX_BARS;b++){
-   int x=18+b*18,level=int(boomboxLevel[b]+0.5f);
-   for(int k=0;k<12;k++){
-    uint16_t color=theme==RAINBOW_THEME?rainbowColor(k*7/12):visualBlend(colors.accent,colors.text,k*18/11);
-    ui.fillRect(x,119-k*6,13,4,level>k?color:bg);
-   }
-   if(boomboxPeak[b])ui.drawFastHLine(x,119-(boomboxPeak[b]-1)*6,13,white);
-  }
-  label(36,132,"RSSI / INTENSIDAD",dim);label(185,132,"SNR / CALIDAD",dim);
-  centered(145,waterfallPaused?"SENAL: PAUSA":"RSSI "+String(rssi)+" / SNR "+String(snr),accent);
- }else if(waterfallView()){
-  textCell(8,24,186,frequencyText(frequencies[band])+" MHz",accent,2);
-  label(202,27,waterfallPaused?"PAUSA":"SENAL",white);
-  int count=WF_BINS;
-  label(38,44,"RSSI / INTENSIDAD",dim);
-  label(190,44,"SNR / CALIDAD",dim);
-  // Merge equal-colour pixels into horizontal runs. This preserves the
-  // exact interpolation and colours with far fewer sprite drawing calls.
-  for(int row=0;row<WF_ROWS;row++){
-   const uint8_t* samples=waterfall[(waterfallHead+row)%WF_ROWS];
-   int runStart=0;uint16_t runColor=bg;
-   for(int x=0;x<304;x++){
-    int position=x*(count-1),bin=position/303,fraction=position%303;
-    int next=min(bin+1,count-1);
-    int v=(int(samples[bin])*(303-fraction)+int(samples[next])*fraction)/303;
-    v=constrain(v,0,80);
-    uint16_t c=v==0?bg:theme==RAINBOW_THEME?visualBlend(bg,rainbowColor((v-1)*7/80),8+v*23/80):visualBlend(bg,accent,v*31/80);
-    if(x==0)runColor=c;
-    else if(c!=runColor){
-     ui.fillRect(8+runStart,56+row*2,x-runStart,2,runColor);
-     runStart=x;runColor=c;
-    }
-   }
-   ui.fillRect(8+runStart,56+row*2,304-runStart,2,runColor);
-  }
-  centered(147,"Historial de senal / tiempo hacia abajo",accent);
  }else{
   String freq=frequencyText(frequencies[band]);
-  String head=band==CB_BAND?"CANAL "+String(cbChannel(frequencies[band])+1)+" / 40":band==0?(rdsName.length()?rdsName:"FM / RDS"):String(mode?"RECEPCION SSB":"RECEPCION AM");
+  String head=band==CB_BAND?"CANAL "+String(cbChannel(frequencies[band])+1)+" / 40":band==0?(rdsName.length()?rdsName:"FM / RDS"):String("RECEPCION ")+modes[mode];
   centered(25,head,menuColor(2,white));
-  int font=(hud==2||hud==5)?4:3;
-  // Stable tuning card across all styles; no decorative lines through text.
+  // Eight distinct layouts; only real receiver measurements.
+  int font=hud==5?4:3;
   if(hud!=5){
-   ui.fillRoundRect(8,37,304,38,6,panel);
-   if(hud==2||hud==6||hud==11)ui.drawRoundRect(8,37,304,38,6,accent);
+   ui.fillRoundRect(8,38,304,36,5,panel);
+   if(hud==2)ui.drawRoundRect(8,38,304,36,5,dim);
+   ui.fillRect(8,44,3,24,accent);
   }
   ui.setTextSize(font);
-  int fw=ui.textWidth(freq), unitWidth=18;
-  int fx=(320-fw-unitWidth-8)/2;
-  textCell(fx,40,fw,freq,menuColor(5,accent),font);
-  textCell(fx+fw+8,58,unitWidth,"MHz",dim);
+  int fw=ui.textWidth(freq),fx=(320-fw-26)/2;
+  textCell(fx,40,fw,freq,white,font);
+  textCell(fx+fw+6,58,20,"MHz",accent);
   for(int n=0;n<2;n++){
-   int x=8+n*156;int reading=n?snr:rssi,maximum=n?50:80;
-   uint16_t accent=menuColor(n?6:3,colors.accent);
+   int x=8+n*156,reading=n?snr:rssi,maximum=n?50:80;
    int level=constrain(reading*100/maximum,0,100);
-   if(hud!=2&&hud!=5&&hud!=6)ui.fillRoundRect(x,78,148,49,6,panel);
-   if(hud==6||hud==11)ui.drawRect(x,78,148,49,dim);
-   textCell(x+7,82,134,n?"SNR / CALIDAD":"RSSI / INTENSIDAD",dim);
-   label(x+7,96,String(reading),white,2);
-   textCell(x+48,104,36,n?"dB":"dBuV",dim,1,false);
-   if(hud==1){for(int k=0;k<10;k++)ui.fillRect(x+89+(k%5)*10,94+(k/5)*11,7,8,level>k*10?menuColor(k+n*3,accent):bg);}
-   if(hud==4||hud==10){
-    int cx=x+114,cy=116;
-    for(int k=0;k<=10;k++){
-     float angle=3.14159265f+k*3.14159265f/10;
-     ui.drawLine(cx+int(cosf(angle)*18),cy+int(sinf(angle)*18),cx+int(cosf(angle)*21),cy+int(sinf(angle)*21),dim);
+   uint16_t ink=menuColor(n?6:3,colors.accent);
+   if(hud!=5)ui.fillRoundRect(x,79,148,49,5,panel);
+   if(hud==26){
+    // Compact dial with a real, bounded percentage arc and raw reading.
+    int cx=x+35,cy=104;
+    for(int k=0;k<30;k++){
+     float angle=(135+k*270.0f/29)*3.14159265f/180;
+     uint16_t c=k*100/30<level?ink:dim;
+     ui.drawLine(cx+int(cosf(angle)*17),cy+int(sinf(angle)*17),cx+int(cosf(angle)*21),cy+int(sinf(angle)*21),c);
     }
-    float angle=3.14159265f+level*3.14159265f/100;
-    ui.drawLine(cx,cy,cx+int(cosf(angle)*18),cy+int(sinf(angle)*18),accent);
-   }
-   if(hud==9){for(int k=0;k<8;k++){int h=3+k*3;ui.fillRect(x+85+k*7,117-h,5,h,level>k*12?menuColor(k+n*3,accent):bg);}}
-   if(hud==11)label(x+96,101,String(level)+"%",accent);
-   // Additional instruments use the same live RSSI/SNR, not invented audio data.
-   if(hud==13){ // Traffic-light quality indicators
-    int active=level<33?0:level<66?1:2;
-    for(int k=0;k<3;k++){
-     ui.fillCircle(x+94+k*18,103,7,k==active?menuColor(k,visualBlend(colors.accent,colors.text,k*8)):bg);
-     ui.drawCircle(x+94+k*18,103,7,dim);
-    }
-   }
-   if(hud==14){ // Circular signal gauge (not a scanning radar)
-    int cx=x+116,cy=105;
-    ui.drawCircle(cx,cy,12,dim);ui.drawCircle(cx,cy,6,dim);
-    ui.drawFastHLine(cx-12,cy,25,dim);ui.drawFastVLine(cx,cy-12,25,dim);
-    float a=(225.0f+level*2.7f)*3.14159265f/180.0f;
-    ui.drawLine(cx,cy,cx+int(cosf(a)*11),cy+int(sinf(a)*11),accent);
-    ui.fillCircle(cx,cy,2,white);
-   }
-   if(hud==15){
-    for(int k=0;k<3;k++){
-     int bx=x+92+k*16,h=level*21/100;
-     uint16_t c=menuColor(k+n*3,accent);
-     ui.drawRoundRect(bx,93,11,24,3,dim);
-     ui.fillRect(bx+3,115-h,5,h,c);
-    }
-   }
-   if(hud==16){
-    for(int k=0;k<12;k++){
-     uint16_t c=menuColor(k+n*3,accent);
-     ui.fillRoundRect(x+88+(k%6)*9,94+(k/6)*12,7,9,2,level*12/100>k?c:bg);
-    }
-   }
-   if(hud==17){
-    label(x+95,96,String(level)+"%",accent);
-    for(int k=0;k<10;k++)ui.fillRect(x+88+k*5,112,3,5,level>k*10?menuColor(k+n*3,accent):bg);
-   }
-   if(hud==18){ // Orbit: bounded ring segments driven by signal level
-    int cx=x+115,cy=105;
-    for(int k=0;k<16;k++){
-     float a=(k*22.5f-90)*3.14159265f/180.0f;
-     ui.fillCircle(cx+int(cosf(a)*12),cy+int(sinf(a)*12),2,level*16/100>k?menuColor(k+n*3,accent):dim);
-    }
-    ui.fillCircle(cx,cy,3,white);
-   }
-   if(hud==19){
+    textCell(x+18,100,34,String(level),white);
+    textCell(x+65,83,78,n?"SNR / dB":"RSSI / dBuV",dim);
+    textCell(x+65,98,78,String(reading),white,3);
+   }else if(hud==27){
+    // Five equal-height precision columns, not audio channels.
+    textCell(x+6,83,78,n?"SNR / dB":"RSSI / dBuV",dim,1,false);
+    textCell(x+6,99,64,String(reading),white,3);
     for(int k=0;k<5;k++){
-     int cx=x+92+k*10,cy=105;
-     uint16_t c=level>k*20?menuColor(k+n*3,accent):dim;
-     ui.fillTriangle(cx,cy-6,cx-4,cy,cx+4,cy,c);
-     ui.fillTriangle(cx,cy+6,cx-4,cy,cx+4,cy,c);
+     int bx=x+82+k*12;
+     ui.drawRect(bx,85,8,37,dim);
+     int h=level*33/100;
+     if(h)ui.fillRect(bx+2,120-h,4,h,visualBlend(ink,white,k*3));
     }
-   }
-   if(hud==20){
-    for(int k=0;k<7;k++){
-     int h=4+k*3;
-     ui.fillRect(x+88+k*7,117-h,5,h,level>k*100/7?menuColor(k+n*3,accent):dim);
+   }else if(hud==28){
+    // 40-cell matrix represents percentage of the instrument scale.
+    textCell(x+6,82,82,n?"SNR / dB":"RSSI / dBuV",dim,1,false);
+    textCell(x+94,82,48,String(reading),white,2);
+    for(int k=0;k<40;k++){
+     int col=k%20,row=k/20;
+     ui.fillCircle(x+9+col*7,109+row*10,2,k*100/40<level?ink:bg);
     }
-   }
-   if(hud==21){
-    for(int k=0;k<2;k++){
-     int y=96+k*13;
-     ui.drawRoundRect(x+88,y,50,8,3,dim);
-     ui.fillRect(x+90,y+2,level*46/100,4,k?white:accent);
+   }else if(hud==1){
+    // Wide analog scale: labels and numbers sit outside the needle area.
+    textCell(x+5,82,62,n?"SNR dB":"RSSI dBuV",dim,1,false);
+    textCell(x+86,82,55,String(reading),white,2);
+    int cx=x+74,cy=124;
+    for(int k=0;k<=10;k++){
+     float angle=(200+k*14)*3.14159265f/180;
+     ui.drawLine(cx+int(cosf(angle)*49),cy+int(sinf(angle)*25),cx+int(cosf(angle)*54),cy+int(sinf(angle)*29),k%5?dim:ink);
     }
-   }
-   ui.fillRect(x+7,120,134,5,bg);
-   if(hud>=13){
-    for(int k=0;k<26;k++){
-     uint16_t c=menuColor(k+n*3,accent);
-     ui.fillRect(x+7+k*5,120,4,5,level>k*100/26?c:dim);
+    float angle=(200+level*1.4f)*3.14159265f/180;
+    ui.drawLine(cx,cy,cx+int(cosf(angle)*47),cy+int(sinf(angle)*24),ink);
+    ui.fillCircle(cx,cy,2,white);
+   }else if(hud==3){
+    textCell(x+6,82,80,n?"CALIDAD / SNR":"SENAL / RSSI",dim,1,false);
+    textCell(x+91,82,51,String(reading),white,2);
+    for(int k=0;k<18;k++){
+     int h=8+k*18/17;
+     uint16_t c=theme==RAINBOW_THEME?rainbowColor(k*7/18+n*3):visualBlend(ink,white,k*10/17);
+     ui.fillRoundRect(x+6+k*7,124-h,5,h,1,level>k*100/18?c:bg);
     }
-   }else if(hud==3||hud==7||hud==9){
-    for(int k=0;k<20;k++)ui.fillRect(x+7+k*6,120,5,5,level>k*5?menuColor(k+n*3,accent):dim);
-   }else if(hud==10){
-    ui.drawFastHLine(x+7,122,134,dim);ui.fillCircle(x+7+level*132/100,122,2,accent);
-   }else {
-    int width=level*134/100;
+   }else if(hud==2){
+    ui.drawRoundRect(x,79,148,49,5,dim);
+    textCell(x+7,84,40,n?"SNR":"RSSI",ink,1,false);
+    textCell(x+48,82,65,String(reading),white,3);
+    textCell(x+112,101,30,n?"dB":"dBuV",dim);
+    for(int k=0;k<22;k++)ui.fillRect(x+8+k*6,119,4,4,level>k*100/22?ink:bg);
+   }else{
+    textCell(x+6,82,84,n?"SNR / CALIDAD":"RSSI / SENAL",dim,1,false);
+    textCell(x+87,82,54,String(reading),white,2);
+    textCell(x+6,99,45,n?"dB":"dBuV",dim,1,false);
+    ui.fillRoundRect(x+6,116,136,5,2,hud==5?panel:bg);
+    int width=level*136/100;
     if(theme==RAINBOW_THEME){
-     for(int k=0;k<7;k++){int left=k*134/7,right=min(width,(k+1)*134/7);
-      if(right>left)ui.fillRect(x+7+left,120,right-left,5,rainbowColor(k+n*3));}
-    }else ui.fillRect(x+7,120,width,5,accent);
+     for(int k=0;k<7;k++){
+      int left=k*136/7,right=min(width,(k+1)*136/7);
+      if(right>left)ui.fillRect(x+6+left,116,right-left,5,rainbowColor(k+n*3));
+     }
+    }else if(width)ui.fillRoundRect(x+6,116,width,5,2,ink);
+    if(hud==0)textCell(x+64,100,77,String(level)+"% escala",ink);
    }
   }
   if(band==0){
    if(rdsText.length()){
     label(10,131,"RDS",dim);
-    ui.setTextSize(1);ui.setTextColor(dim);
+    ui.setTextSize(1);ui.setTextColor(readableText(dim));
     ui.setClipRect(34,131,RDS_TEXT_WIDTH,10);
     ui.setCursor(34-int(rdsScrollOffset),131);ui.print(rdsScrollSource);
     if(rdsScrollWidth){
@@ -942,7 +923,7 @@ void draw(){
 
  }
  ui.fillRect(0,157,320,13,panel);
- centered(160,notice.length()?notice:menu?(infoMenu?"Girar: pagina / Pulsar: volver":"Girar: elegir / Pulsar: abrir"):signalHistoryView()?"Pulsar: pausa / Rueda: sintonia":volumeMode?"RUEDA: volumen / Mantener: menu":"RUEDA: sintonia / Mantener: menu",dim);
+ centered(160,notice.length()?notice:menu?(infoMenu?"Girar: pagina / Pulsar: volver":"Girar: elegir / Pulsar: abrir"):volumeMode?"RUEDA: volumen / Mantener: menu":"RUEDA: sintonia / Mantener: menu",dim);
  ui.pushSprite(0,0);
 }
 String cleanRds(const char* text,size_t maxLen){
@@ -963,10 +944,15 @@ void pollRds(){
  uint8_t address=radio.getRdsTextSegmentAddress();
  if(group==0){
   uint8_t segment=address&3;
-  // Own PS buffer: group 0 bit 4 is NOT the RadioText A/B flag.
+  // A PS name is a complete ordered cycle, not a bag of segments.
+  // Start again at segment zero; never mix two changing station names.
+  // Keep the last complete name visible while a new cycle is collected.
+  if(segment==0){rdsNameSegments=0;memset(psBuffer,0,sizeof(psBuffer));}
+  if(segment!=rdsNameSegments){rdsNameSegments=0;return;}
+  // Group 0 bit 4 is NOT the RadioText A/B flag.
   radio.getNext2Block(psBuffer+segment*2);
-  psBuffer[8]=0;rdsNameSegments|=uint8_t(1U<<segment);
-  if(rdsNameSegments==15){
+  psBuffer[8]=0;rdsNameSegments++;
+  if(rdsNameSegments==4){
    String complete=cleanRds(psBuffer,8);
    if(complete.length()&&complete!=rdsName){rdsName=complete;if(!menu)dirty=true;}
    rdsNameSegments=0;
@@ -1016,15 +1002,12 @@ void adjust(int d){
  case 5:agc=!agc;audioSettings();break;
  case 6:attenuation=constrain(int(attenuation)+d,0,26);audioSettings();break;
  case 7:if(autoVfoActive()){message("Desactiva AFC para BFO");break;}if(band&&mode){bfo=constrain(int(bfo)+d*10,-16000,16000);radio.setSSBBfo(bfo);}break;
- case 18:toggleWifi();return;
- case 19:toggleBle();return;
  case 21:squelchMode=wrap(squelchMode+d,3);noiseFloorValid=false;autoSquelchThreshold=6;updateSquelch(millis());break;
  case 22:if(squelchMode==2){message("Nivel automatico");return;}squelch=constrain(int(squelch)+d,0,80);updateSquelch(millis());break;
- case 20:return;
  case 17:afcEnabled=d>0;audioSettings();message(!afcEnabled?"BFO manual restaurado":autoVfoActive()?"SYNC: requiere portadora":"Guardado / activo en SSB");break;
- case 8:stopSweep();hud=wrap(hud+d,HUD_COUNT);clearWaterfall();waterfallPaused=false;break;
+ case 8:hud=nextHud(hud,d);resetHud();break;
  case 14:theme=wrap(theme+d,THEME_COUNT);break;
- case 15:region=wrap(region+d,7);applyRegion();stepIndex=band==0?3:region==2?3:2;selectBand();break;
+ case 15:region=wrap(region+d,7);applyRegion();stepIndex=band==0?3:region==2?3:2;applyBandMode();selectBand();break;
  case 9:muted=!muted;audioSettings();break;
  case 10:slot=wrap(slot+d,10);break;
  }
@@ -1033,7 +1016,6 @@ void adjust(int d){
 void click(){
  if(signalSearch){cancelSearch();resetRds();changed();message("Busqueda cancelada");return;}
  if(menu&&!menuRoot&&!ampMenu&&!infoMenu&&item==25){startSearch();editing=false;menu=false;return;}
- if(!menu&&signalHistoryView()){waterfallPaused=!waterfallPaused;stopSweep();dirty=true;return;}
  if(!menu){volumeMode=!volumeMode;dirty=true;return;}
  if(infoMenu){infoMenu=false;dirty=true;return;}
  if(menuRoot){
@@ -1054,7 +1036,7 @@ void click(){
    else{folderOpen=true;folderPosition=0;}
   }else if(folderPosition==folderSize(folder)){folderOpen=false;}
   else{
-   stopSweep();band=folderBand(folder,folderPosition);
+   band=folderBand(folder,folderPosition);
    applyBandMode();
    if(band>=52)stepIndex=0;
    if(band==2&&region)stepIndex=region==2?3:2;
@@ -1064,68 +1046,20 @@ void click(){
  }
  if(editing){editing=false;dirty=true;return;}
  if(item==13){menuRoot=true;dirty=true;return;}
- if(item==11){memories[slot]={frequencies[band],band,mode};if(settingsAvailable&&prefs.putBytes("mem",memories,sizeof(memories))==sizeof(memories))message("Memoria guardada");else message("Error al guardar memoria");}
+ if(item==11){
+  // Commit the in-memory slot only after the complete NVS write succeeds.
+  Memory pending[10];memcpy(pending,memories,sizeof(pending));
+  pending[slot]={frequencies[band],band,mode};
+  if(settingsAvailable&&prefs.putBytes("mem",pending,sizeof(pending))==sizeof(pending)){
+   memcpy(memories,pending,sizeof(memories));message("Memoria guardada");
+  }else message("Error al guardar memoria");
+ }
  else if(item==12){
   Memory m=memories[slot];
   if(!m.frequency||m.band>=BAND_COUNT||m.mode>2)message("Memoria vacia o invalida");
-  else {stopSweep();band=m.band;automaticMode=false;mode=m.mode;bfo=0;frequencies[band]=constrain(m.frequency,bands[band].lo,bands[band].hi);selectBand();message("Memoria cargada");}
+  else {band=m.band;automaticMode=false;mode=m.mode;bfo=0;frequencies[band]=constrain(m.frequency,bands[band].lo,bands[band].hi);selectBand();message("Memoria cargada");}
  }else{editing=true;if(item==0){locateBandFolder(band);folderOpen=false;}}
  dirty=true;
-}
-const char* executeRemote(const char* text){
- if(!ready)return "Radio no detectada";
- // Parse within explicit bounds; reject overflow and trailing garbage.
- if(!text)return "Formato invalido";
- while(isspace((unsigned char)*text))++text;
- char op[12]={};size_t opLen=0;
- while(*text&&!isspace((unsigned char)*text)){
-  if(opLen>=sizeof(op)-1)return "Formato invalido";
-  op[opLen++]=*text++;
- }
- if(!opLen)return "Formato invalido";
- while(isspace((unsigned char)*text))++text;
- int fields=1;long n=0;
- if(*text){
-  errno=0;char* end=nullptr;n=strtol(text,&end,10);
-  if(end==text||errno==ERANGE)return "Formato invalido";
-  while(isspace((unsigned char)*end))++end;
-  if(*end)return "Formato invalido";
-  fields=2;
- }
- if(fields==1&&(!strcmp(op,"UP")||!strcmp(op,"DOWN"))){
-  cancelSearch();stopSweep();int d=!strcmp(op,"UP")?1:-1;
-  if(turnFine(d))return autoVfoActive()?"Desactiva AFC para BFO":"OK";
-  int f=band==CB_BAND?cbFrequencies[wrap(cbChannel(frequencies[band])+d,40)]:int(frequencies[band])+d*step();
-  if(f>bands[band].hi)f=bands[band].lo;if(f<bands[band].lo)f=bands[band].hi;
-  frequencies[band]=f;radio.setFrequency(f);resetRds();changed();return "OK";
- }
- if(fields!=2)return "Formato invalido";
- if(!strcmp(op,"SEARCH")&&(n==0||n==1)){
-  if(n){if(band&&mode)return "Busqueda solo AM / FM";startSearch();}
-  else{cancelSearch();resetRds();changed();}return "OK";
- }
- if(!strcmp(op,"TIMER")&&n>=0&&n<=120){setAudioTimer(n);return "OK";}
- cancelSearch();
- if(!strcmp(op,"BAND")&&n>=0&&n<BAND_COUNT){stopSweep();band=n;applyBandMode();selectBand();}
- else if(!strcmp(op,"FREQ")&&n>=bands[band].lo&&n<=bands[band].hi){
-  if(band==CB_BAND&&cbFrequencies[cbChannel(n)]!=n)return "Usa CH 1..40";
-  stopSweep();frequencies[band]=n;radio.setFrequency(n);resetRds();
- }
- else if(!strcmp(op,"CH")&&n>=1&&n<=40){stopSweep();band=CB_BAND;mode=0;frequencies[band]=cbFrequencies[n-1];selectBand();}
- else if(!strcmp(op,"MODE")&&n>=0&&n<=2&&band&&band!=CB_BAND){automaticMode=false;mode=n;selectBand();}
- else if(!strcmp(op,"VOL")&&n>=0&&n<=63){volume=n;audioSettings();}
- else if(!strcmp(op,"MUTE")&&(n==0||n==1)){muted=n;audioSettings();}
- else if(!strcmp(op,"BFO")&&n>=-16000&&n<=16000&&band&&mode&&!autoVfoActive()){bfo=n;radio.setSSBBfo(bfo);}
- else if((!strcmp(op,"AFC")||!strcmp(op,"AUTOVFO"))&&(n==0||n==1)){afcEnabled=n;audioSettings();}
- else if(!strcmp(op,"HUD")&&n>=0&&n<HUD_COUNT){stopSweep();hud=n;clearWaterfall();waterfallPaused=false;}
- else if(!strcmp(op,"THEME")&&n>=0&&n<THEME_COUNT)theme=n;
- else if(!strcmp(op,"SQLMODE")&&n>=0&&n<=2){squelchMode=n;noiseFloorValid=false;autoSquelchThreshold=6;updateSquelch(millis());}
- else if(!strcmp(op,"SQL")&&n>=0&&n<=80){squelch=n;squelchMode=n?1:0;updateSquelch(millis());}
- else if(!strcmp(op,"STORE")&&n>=1&&n<=10){memories[n-1]={frequencies[band],band,mode};if(!settingsAvailable||prefs.putBytes("mem",memories,sizeof(memories))!=sizeof(memories))return "Error al guardar";}
- else if(!strcmp(op,"RECALL")&&n>=1&&n<=10){Memory m=memories[n-1];if(!m.frequency||m.band>=BAND_COUNT||m.mode>2)return "Memoria vacia o invalida";stopSweep();band=m.band;automaticMode=false;mode=m.mode;bfo=0;frequencies[band]=constrain(m.frequency,bands[band].lo,bands[band].hi);selectBand();}
- else if(!strcmp(op,"AMP")&&(n==0||n==1)){ampEnabled=n;audioSettings();}
- else return "Valor o modo no valido";
- changed();return "OK";
 }
 void setup(){
  Serial.begin(115200);
@@ -1149,6 +1083,11 @@ void setup(){
  pinMode(ENC_A,INPUT_PULLUP);pinMode(ENC_B,INPUT_PULLUP);pinMode(BUTTON,INPUT_PULLUP);
  encoderState=(digitalRead(ENC_A)<<1)|digitalRead(ENC_B);
  settingsAvailable=prefs.begin("ats-custom",false);
+ if(settingsAvailable){
+  const uint8_t cycle=prefs.getUChar("cowcycle",0)%3;
+  startupAbductCow=(cycle==0);
+  if(prefs.putUChar("cowcycle",(cycle+1)%3)!=1)startupAbductCow=true;
+ }
  automaticMode=prefs.getBool("automode",true);
  language=constrain(prefs.getUChar("lang",0),0,LANGUAGE_COUNT-1);
  if(!settingsAvailable)Serial.println("Ajustes no disponibles: se usaran valores iniciales.");
@@ -1158,17 +1097,25 @@ void setup(){
  squelchMode=constrain(prefs.getUChar("sqlmode",squelch?1:0),0,2);
  for(int i=0;i<BAND_COUNT;i++)frequencies[i]=bands[i].initial;
  size_t savedFreqBytes=prefs.getBytesLength("freq");
- if(savedFreqBytes && savedFreqBytes<=sizeof(frequencies) && savedFreqBytes%sizeof(uint16_t)==0)
-  prefs.getBytes("freq",frequencies,savedFreqBytes);
+ if(savedFreqBytes && savedFreqBytes<=sizeof(frequencies) && savedFreqBytes%sizeof(uint16_t)==0){
+  // Preserve defaults on failed reads; older, shorter band tables remain valid.
+  uint16_t pending[BAND_COUNT];memcpy(pending,frequencies,sizeof(pending));
+  if(prefs.getBytes("freq",pending,savedFreqBytes)==savedFreqBytes)
+   memcpy(frequencies,pending,sizeof(frequencies));
+ }
  for(int i=0;i<BAND_COUNT;i++)frequencies[i]=constrain(frequencies[i],bands[i].lo,bands[i].hi);
  band=constrain(prefs.getUChar("band",0),0,BAND_COUNT-1);mode=constrain(prefs.getUChar("mode",0),0,2);
  volume=constrain(prefs.getUChar("vol",12),0,63);stepIndex=constrain(prefs.getUChar("step",2),0,7);
  amFilterAuto=prefs.getBool("afa",false);ssbFilterAuto=prefs.getBool("sfa",false);
  amFilter=constrain(prefs.getUChar("af",3),0,6);ssbFilter=constrain(prefs.getUChar("sf",1),0,5);
- attenuation=constrain(prefs.getUChar("att",0),0,26);agc=prefs.getBool("agc",true);hud=constrain(prefs.getUChar("hud",0),0,HUD_COUNT-1);
+ attenuation=constrain(prefs.getUChar("att",0),0,26);agc=prefs.getBool("agc",true);hud=canonicalHud(constrain(prefs.getUChar("hud",0),0,HUD_COUNT-1));
  theme=constrain(prefs.getUChar("theme",0),0,THEME_COUNT-1);region=constrain(prefs.getUChar("region",0),0,6);applyRegion();
  bfo=constrain(prefs.getShort("bfo",0),-16000,16000);
- if(prefs.getBytesLength("mem")==sizeof(memories))prefs.getBytes("mem",memories,sizeof(memories));
+ if(prefs.getBytesLength("mem")==sizeof(memories)){
+  Memory pending[10]={};
+  if(prefs.getBytes("mem",pending,sizeof(pending))==sizeof(pending))
+   memcpy(memories,pending,sizeof(memories));
+ }
  for(auto &m:memories){
   if(m.band>=BAND_COUNT||m.mode>2||m.frequency<bands[m.band].lo||m.frequency>bands[m.band].hi)m={0,0,0};
   else if(m.band==CB_BAND){m.mode=0;m.frequency=cbFrequencies[cbChannel(m.frequency)];}
@@ -1184,7 +1131,7 @@ void setup(){
   delay(1); // Yield to the ESP32 tasks throughout the presentation.
  }
  drawStartup(6000);
- clearWaterfall();
+ resetHud();
  ready=radio.getDeviceI2CAddress(RESET)!=0;
  // Welcome finishes before a separate SSB loading screen is shown.
  if(ready){radio.setup(RESET,0);applyBandMode();selectBand(true);}else Serial.println("No se detecta SI4732; amplificador desactivado.");
@@ -1194,13 +1141,12 @@ void setup(){
  buttonChange=millis();
  // Discard encoder transitions made during the blocking startup sequence.
  encoderState=(digitalRead(ENC_A)<<1)|digitalRead(ENC_B);quarters=0;
- remoteSetup();
  draw();dirty=false;
 }
 bool turnFine(int d){
  if(!fineTuning())return false;
  if(autoVfoActive()){message("Desactiva AFC para BFO");return true;}
- stopSweep();bfo=constrain(int(bfo)+d*fineStepHz(),-16000,16000);
+ bfo=constrain(int(bfo)+d*fineStepHz(),-16000,16000);
  radio.setSSBBfo(bfo);changed();return true;
 }
 void loop(){
@@ -1221,7 +1167,7 @@ void loop(){
    }}
    else if(volumeMode){volume=constrain(int(volume)+d,0,63);audioSettings();changed();}
    else if(turnFine(d)){}
-   else{stopSweep();int next;
+   else{int next;
     if(band==CB_BAND)next=cbFrequencies[wrap(cbChannel(frequencies[band])+d,40)];
     else{next=int(frequencies[band])+d*step();if(next>bands[band].hi)next=bands[band].lo;if(next<bands[band].lo)next=bands[band].hi;}frequencies[band]=next;radio.setFrequency(next);resetRds();changed();}
   }
@@ -1231,17 +1177,15 @@ void loop(){
  if(now-buttonChange>=30&&raw!=buttonStable){
   buttonStable=raw;if(!raw){pressedAt=now;buttonArmed=true;}
   else if(!buttonArmed){buttonArmed=true;}
-  else if(ready){if(now-pressedAt>=700){cancelSearch();stopSweep();menu=!menu;menuRoot=true;menuGroup=0;menuPosition=0;item=0;infoMenu=false;ampMenu=false;ampEditing=false;editing=false;volumeMode=false;dirty=true;}else click();}
+  else if(ready){if(now-pressedAt>=700){cancelSearch();menu=!menu;menuRoot=true;menuGroup=0;menuPosition=0;item=0;infoMenu=false;ampMenu=false;ampEditing=false;editing=false;volumeMode=false;dirty=true;}else click();}
  }
- remotePoll(now);
- now=millis(); // Remote commands can retune or load the SSB patch.
  pollSearch(now);
  now=millis(); // Never compare fresh tuning timestamps with an older clock.
  if(audioTimerAt&&int32_t(now-audioTimerAt)>=0){
-  audioTimerAt=0;audioTimerMinutes=0;cancelSearch();stopSweep();waterfallPaused=true;
+  audioTimerAt=0;audioTimerMinutes=0;cancelSearch();
   muted=true;audioSettings();message("Temporizador: audio silenciado");changed();
  }
- if(ready&&!sweepActive&&!signalSearch&&now-lastSignal>=SIGNAL_POLL_MS){
+ if(ready&&!signalSearch&&now-lastSignal>=SIGNAL_POLL_MS){
   radio.getCurrentReceivedSignalQuality(0);
   lastSignal=millis(); // Timestamp the completed sample, without catch-up bursts.
   const uint8_t r=radio.getCurrentRSSI(),s=radio.getCurrentSNR();
@@ -1251,15 +1195,14 @@ void loop(){
    if(!menu)dirty=true; // Redraw only when measured values change.
   }
  }
- pollWaterfall(millis()); // Animate using the newest reception sample.
  now=millis(); // Signal-quality reads also consume time.
- if(ready&&!sweepActive&&!signalSearch){updateSquelch(now);updateAutoFilter(now);}
- if(ready&&!sweepActive&&!signalSearch&&band==0&&now-lastRds>=20){lastRds=now;pollRds();}
+ if(ready&&!signalSearch){updateSquelch(now);updateAutoFilter(now);}
+ if(ready&&!signalSearch&&band==0&&now-lastRds>=20){lastRds=now;pollRds();}
  // Advance once per displayed frame, never catch up with a multi-pixel jump.
  // Keep both copies moving through the wrap without a pause at every lap.
  bool scrollFrame=false;
- now=millis(); // Radio and remote calls above can consume time.
- if(band==0&&!menu&&!signalHistoryView()){
+ now=millis(); // Radio calls above can consume time.
+ if(band==0&&!menu){
   if(rdsScrollSource!=rdsText){
    // Preserve motion while the receiver appends segments of this message.
    bool continuation=rdsScrollSource.length()&&rdsText.startsWith(rdsScrollSource);
@@ -1273,17 +1216,18 @@ void loop(){
    scrollFrame=true;
   }
  }else rdsScrollAt=now+400;
- if(saveAt&&int32_t(now-saveAt)>=0)save();
+ // A scan frequency is provisional; persist only after stop or restoration.
+ if(saveAt&&!signalSearch&&int32_t(now-saveAt)>=0)save();
  if(notice.length()&&int32_t(now-noticeUntil)>=0){notice="";dirty=true;}
- if(now-lastBattery>=500){lastBattery=now;pollBattery();}
+ if(now-lastBattery>=2000){lastBattery=now;pollBattery();}
  // No delays, new buffers or radio calls for animation. Never catch up
  // missed frames after a slow operation; preserve the RDS frame cadence.
- if(ready&&(!menu||ampMenu||(!infoMenu&&!editing)|| (editing&&item==0))&&now-lastAnimation>=33){
+ if(ready&&(!menu||ampMenu||(!infoMenu&&!editing)|| (editing&&item==0))&&now-lastAnimation>=66){
   lastAnimation=now;
   uint8_t nextFrame=uint8_t((now/33UL)%32);
   // Repaint only when the breathing brightness or antenna wave changes.
-  int oldBrightness=int(7.0f*(0.5f+0.5f*cosf(animationFrame*6.2831853f/32.0f)));
-  int newBrightness=int(7.0f*(0.5f+0.5f*cosf(nextFrame*6.2831853f/32.0f)));
+  int oldBrightness=pulseLevels[animationFrame];
+  int newBrightness=pulseLevels[nextFrame];
   if(oldBrightness!=newBrightness||(animationFrame/4)%3!=(nextFrame/4)%3)dirty=true;
   animationFrame=nextFrame;
  }
