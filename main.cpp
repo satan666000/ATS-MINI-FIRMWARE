@@ -15,7 +15,7 @@ SI4735 radio;
 Preferences prefs;
 bool startupAbductCow=true;
 constexpr const char* FIRMWARE_NAME="KALIMAN";
-constexpr const char* FIRMWARE_VERSION="1.1.42";
+constexpr const char* FIRMWARE_VERSION="1.1.50";
 constexpr const char* FIRMWARE_CREATOR="KO6EAI";
 constexpr int POWER=15, AMP=10, MUTE=3, RESET=16, SDA_PIN=18, SCL_PIN=17;
 constexpr int BL=38, ENC_A=2, ENC_B=1, BUTTON=21, BATTERY_PIN=4;
@@ -674,7 +674,7 @@ void drawStartup(uint32_t elapsed){
  centered(129,"Iniciando radio...",0xBDF7);
  // Presentation timeline, not a claimed hardware initialization percentage.
  ui.drawRoundRect(40,144,240,7,3,dim);
- int fill=int(min(elapsed,6000UL)*234UL/6000UL);
+ int fill=int(min(elapsed,6000U)*234U/6000U);
  if(fill>0)ui.fillRect(43,146,fill,3,cyan);
  // Orbiting light along the bottom border.
  int comet=22+int(elapsed*100UL/1000UL)%276;

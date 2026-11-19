@@ -1,66 +1,76 @@
-<p align="center">
-  <img src="assets/ats-mini-banner.svg" alt="ATS Mini firmware banner" width="100%">
-</p>
+<div align="center">
+  <img src="assets/ats-mini-banner.svg" alt="ATS Mini KALIMAN firmware banner" width="100%">
 
-<h1 align="center">ATS Mini Firmware</h1>
+# ATS Mini — KALIMAN Firmware
 
-<p align="center">
-  KALIMAN firmware and recovery images for compatible ATS Mini SI4732 ESP32-S3 radios.<br>
-  Firmware KALIMAN e imágenes de recuperación para radios ATS Mini SI4732 ESP32-S3 compatibles.
-</p>
+**Firmware personalizado para radios ATS Mini SI4732 con ESP32-S3**
 
-<p align="center">
-  <a href="https://github.com/satan666000/ATS-MINI-FIRMWARE/actions/workflows/firmware.yml"><img src="https://github.com/satan666000/ATS-MINI-FIRMWARE/actions/workflows/firmware.yml/badge.svg?branch=main" alt="Firmware CI status"></a>
-  <a href="https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest"><img src="https://img.shields.io/github/v/release/satan666000/ATS-MINI-FIRMWARE?style=flat-square" alt="Latest release"></a>
-  <img src="https://img.shields.io/badge/Platform-ESP32--S3-blue?style=flat-square" alt="Platform: ESP32-S3">
-  <img src="https://img.shields.io/badge/Radio-ATS%20Mini%20SI4732-green?style=flat-square" alt="Radio: ATS Mini SI4732">
-  <img src="https://img.shields.io/badge/License-not%20specified-lightgrey?style=flat-square" alt="License not specified">
-</p>
+[![Latest release](https://img.shields.io/github/v/release/satan666000/ATS-MINI-FIRMWARE?style=for-the-badge)](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest)
+[![Firmware CI](https://github.com/satan666000/ATS-MINI-FIRMWARE/actions/workflows/firmware.yml/badge.svg?branch=main)](https://github.com/satan666000/ATS-MINI-FIRMWARE/actions/workflows/firmware.yml)
+![Platform](https://img.shields.io/badge/Platform-ESP32--S3-blue?style=for-the-badge)
+![Radio](https://img.shields.io/badge/Radio-SI4732-green?style=for-the-badge)
 
-<p align="center">
-  <a href="#overview">English</a> ·
-  <a href="#español">Español</a> ·
-  <a href="docs/FLASHING.md">Flashing guide / Guía de flasheo</a>
-</p>
+[English](#english) · [Español](#español) · [Flashing Guide](docs/FLASHING.md)
+
+</div>
+
+> [!WARNING]
+> **Compatibilidad y seguridad / Compatibility and safety**
+>
+> Confirm the exact ATS Mini model and hardware revision before flashing. Always keep a backup of the original firmware. Firmware images can permanently alter the device if the wrong hardware or offset is used.
+>
+> Confirma el modelo exacto y la revisión de hardware del ATS Mini antes de flashear. Conserva siempre una copia del firmware original. Una imagen, hardware o dirección incorrectos pueden modificar el dispositivo de forma permanente.
 
 ---
 
-<details>
-<summary><strong>Contents / Contenido</strong></summary>
+## English
 
-**English:** [Overview](#overview) · [Firmware files](#firmware-files) · [Quick flashing](#quick-flashing) · [Build](#build-from-source) · [Safety](#compatibility-and-safety)
+**KALIMAN** is a custom firmware for the ATS Mini radio, based on the ESP32-S3 platform and SI4732 receiver, developed by **KO6EAI**.
 
-**Español:** [Descripción](#español) · [Archivos](#archivos-de-firmware) · [Flasheo](#flasheo-rápido) · [Compilación](#compilar-desde-el-código-fuente) · [Seguridad](#compatibilidad-y-seguridad)
-</details>
+### KALIMAN overview
 
-## Overview
+**Current version:** `1.1.50`
 
-This repository contains the KALIMAN firmware source and a prebuilt recovery package for compatible ATS Mini SI4732 ESP32-S3 radios. Verify the exact board model and hardware revision before installing any image.
+KALIMAN adds expanded radio reception and control features while preserving a familiar, configurable interface for compatible ATS Mini devices.
 
-### Firmware files
+### Features
+
+- FM reception with RDS/RBDS, AM, shortwave, and SSB (LSB/USB).
+- US CB support: 40 channels from 26.965 to 27.405 MHz.
+- Automatic modulation selection by band or manual selection.
+- Disabled, manual, or RSSI-based automatic squelch.
+- Automatic FM stereo or forced mono reception.
+- Signal level, SNR, battery, and mono/stereo indicators.
+- Multilingual interface, selectable themes, and a reception-data-based HUD.
+- Animated startup screen and configuration menus.
+
+### What to know
+
+- Wi-Fi and BLE remote control are not supported.
+- Some functions are still being validated with real reception.
+- Use only firmware images built for compatible hardware.
+- Keep a backup of important settings and the original firmware.
+- `firmware.bin` contains the application; it is not a complete flash backup.
+
+### Downloads
+
+The recommended images and release packages are published on the [GitHub Releases](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest) page.
 
 | File | Purpose | Flash offset |
-| --- | --- | ---: |
-| `ATSMINI/bootloader.bin` | Bootloader | `0x00000` |
-| `ATSMINI/partitions.bin` | Partition table | `0x08000` |
+| :--- | :--- | ---: |
+| `ATSMINI/bootloader.bin` | ESP32-S3 bootloader | `0x00000` |
+| `ATSMINI/partitions.bin` | Flash partition table | `0x08000` |
 | `ATSMINI/boot_app0.bin` | Application boot image | `0x0E000` |
-| `ATSMINI/firmware.bin` | Main firmware | `0x10000` |
-
-### Source and project files
-
-| Path | Description |
-| --- | --- |
-| `main.cpp` | Firmware application and radio behavior |
-| `Display.h` | ATS Mini display driver |
-| `Languages.h` | User-interface translations |
-| `SSBPatch.h` | SSB patch implementation |
-| `include/Remote.h` | Wi-Fi and BLE remote-control support |
-| `ci/platformio-release.ini` | PlatformIO release-build configuration |
-| `.github/workflows/firmware.yml` | Firmware build and release workflow |
+| `ATSMINI/firmware.bin` | KALIMAN application firmware | `0x10000` |
 
 ### Quick flashing
 
-**Requirements:** Python 3.x, `esptool`, a USB data cable, and the radio in programming mode.
+**Requirements**
+
+- Python 3.x
+- `esptool`
+- USB data cable
+- Radio in programming mode
 
 Install `esptool`:
 
@@ -68,7 +78,10 @@ Install `esptool`:
 python -m pip install esptool
 ```
 
-From the repository root, replace `<PORT>` with the radio's serial port (`COMx` on Windows or `/dev/tty...` on Linux/macOS):
+Replace `<PORT>` with the serial port for the radio:
+
+- Windows: `COM3`, `COM4`, or another available `COM` port
+- Linux/macOS: `/dev/ttyUSB0`, `/dev/cu.usbserial-*`, or a similar device
 
 ```bash
 python -m esptool --port <PORT> write-flash \
@@ -78,67 +91,89 @@ python -m esptool --port <PORT> write-flash \
   0x10000 ATSMINI/firmware.bin
 ```
 
-> **Before flashing:** confirm hardware compatibility and back up the existing firmware. Do not erase the full flash unless the device-specific instructions explicitly require it.
-
-See the [complete flashing guide](docs/FLASHING.md) and [flash-offset list](ATSMINI/FLASH-OFFSETS.txt) for details.
+Follow the [complete flashing guide](docs/FLASHING.md) and verify the [flash offsets](ATSMINI/FLASH-OFFSETS.txt) before proceeding. Do not erase the full flash unless the device-specific instructions require it.
 
 ### Build from source
-
-Install the PlatformIO version used by CI, then build the ATS Mini environment:
 
 ```bash
 python -m pip install platformio==6.1.18
 pio run --project-conf ci/platformio-release.ini -e ats-mini
 ```
 
-GitHub Actions also builds the firmware for pushes and pull requests. A versioned release requires an `X.Y.Z` tag that matches `FIRMWARE_VERSION` in `main.cpp`.
+GitHub Actions builds the firmware for pushes and pull requests. A versioned release requires an `X.Y.Z` tag matching `FIRMWARE_VERSION` in `main.cpp`.
 
-### Compatibility and safety
+### Project structure
 
-- Confirm the exact ATS Mini model and hardware revision before flashing.
-- Use only images built for compatible hardware.
-- Keep a backup of important device data and configuration.
-- `firmware.bin` contains the application; it is not a full-flash backup.
-- Do not share device serial numbers, credentials, or personal information in support requests.
+| Path | Description |
+| :--- | :--- |
+| `main.cpp` | Main firmware application and radio behavior |
+| `Display.h` | ATS Mini display driver |
+| `Languages.h` | Multilingual user-interface translations |
+| `SSBPatch.h` | SSB patch implementation |
+| `include/Remote.h` | Wi-Fi and BLE remote-control support |
+| `ci/platformio-release.ini` | PlatformIO release configuration |
+| `.github/workflows/firmware.yml` | Build and release workflow |
 
 ### Support
 
-When reporting an issue, include the board model and revision, operating system, `esptool` version, serial port, and exact error message.
+Include the following information when reporting a problem:
 
-### License
-
-This repository does not declare an explicit license. Do not assume that its source code, firmware, or binaries may be reused, redistributed, or modified without permission from the rights holder. Preserve all third-party notices; the SSB patch has a commercial redistribution restriction.
+- Board model and hardware revision
+- Operating system
+- `esptool` version
+- Serial port
+- Exact error message
 
 ---
 
 ## Español
 
-Este repositorio contiene el código fuente del firmware KALIMAN y un paquete de recuperación precompilado para radios ATS Mini SI4732 ESP32-S3 compatibles. Verifica el modelo y la revisión exactos de la placa antes de instalar cualquier imagen.
+**KALIMAN** es un firmware personalizado para el ATS Mini, basado en la plataforma ESP32-S3 y el receptor SI4732, desarrollado por **KO6EAI**.
 
-### Archivos de firmware
+### Presentación de KALIMAN
+
+**Versión actual:** `1.1.50`
+
+KALIMAN amplía las funciones de recepción y control de radio mientras conserva una interfaz configurable y familiar para dispositivos ATS Mini compatibles.
+
+### Características
+
+- Recepción FM con RDS/RBDS, AM, onda corta y SSB (LSB/USB).
+- CB estadounidense: 40 canales de 26,965 a 27,405 MHz.
+- Selección de modulación automática por banda o selección manual.
+- Squelch desactivado, manual o automático basado en RSSI.
+- FM estéreo automático o recepción mono forzada.
+- Indicadores de señal, SNR, batería y mono/estéreo.
+- Interfaz multilingüe, temas configurables y HUD basado en datos de recepción.
+- Pantalla de inicio animada y menús de configuración.
+
+### Consideraciones importantes
+
+- No incluye control remoto por Wi-Fi ni BLE.
+- Algunas funciones siguen en validación con recepción real.
+- Utiliza únicamente imágenes diseñadas para hardware compatible.
+- Conserva una copia de seguridad de los ajustes y del firmware original.
+- `firmware.bin` contiene la aplicación; no es una copia completa de la memoria flash.
+
+### Descargas
+
+Las imágenes recomendadas y los paquetes de cada versión se publican en [GitHub Releases](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest).
 
 | Archivo | Función | Dirección de flasheo |
-| --- | --- | ---: |
-| `ATSMINI/bootloader.bin` | Bootloader | `0x00000` |
-| `ATSMINI/partitions.bin` | Tabla de particiones | `0x08000` |
+| :--- | :--- | ---: |
+| `ATSMINI/bootloader.bin` | Bootloader del ESP32-S3 | `0x00000` |
+| `ATSMINI/partitions.bin` | Tabla de particiones de la flash | `0x08000` |
 | `ATSMINI/boot_app0.bin` | Imagen de arranque de la aplicación | `0x0E000` |
-| `ATSMINI/firmware.bin` | Firmware principal | `0x10000` |
-
-### Código fuente y archivos del proyecto
-
-| Ruta | Descripción |
-| --- | --- |
-| `main.cpp` | Aplicación del firmware y funcionamiento de la radio |
-| `Display.h` | Controlador de pantalla del ATS Mini |
-| `Languages.h` | Traducciones de la interfaz |
-| `SSBPatch.h` | Implementación del parche SSB |
-| `include/Remote.h` | Control remoto por Wi-Fi y BLE |
-| `ci/platformio-release.ini` | Configuración de compilación de lanzamiento |
-| `.github/workflows/firmware.yml` | Flujo de compilación y publicación del firmware |
+| `ATSMINI/firmware.bin` | Firmware de la aplicación KALIMAN | `0x10000` |
 
 ### Flasheo rápido
 
-**Requisitos:** Python 3.x, `esptool`, un cable USB con datos y la radio en modo de programación.
+**Requisitos**
+
+- Python 3.x
+- `esptool`
+- Cable USB con datos
+- Radio en modo de programación
 
 Instala `esptool`:
 
@@ -146,7 +181,10 @@ Instala `esptool`:
 python -m pip install esptool
 ```
 
-Desde la raíz del repositorio, reemplaza `<PORT>` por el puerto serie de la radio (`COMx` en Windows o `/dev/tty...` en Linux/macOS):
+Reemplaza `<PORT>` por el puerto serie de la radio:
+
+- Windows: `COM3`, `COM4` u otro puerto `COM` disponible
+- Linux/macOS: `/dev/ttyUSB0`, `/dev/cu.usbserial-*` o un dispositivo similar
 
 ```bash
 python -m esptool --port <PORT> write-flash \
@@ -156,33 +194,43 @@ python -m esptool --port <PORT> write-flash \
   0x10000 ATSMINI/firmware.bin
 ```
 
-> **Antes de flashear:** confirma la compatibilidad del hardware y guarda una copia del firmware actual. No borres toda la memoria flash salvo que las instrucciones específicas del dispositivo lo exijan.
-
-Consulta la [guía completa de flasheo](docs/FLASHING.md) y la [lista de direcciones](ATSMINI/FLASH-OFFSETS.txt) para obtener más detalles.
+Consulta la [guía completa de flasheo](docs/FLASHING.md) y verifica la [lista de direcciones](ATSMINI/FLASH-OFFSETS.txt) antes de continuar. No borres toda la memoria flash salvo que las instrucciones específicas del dispositivo lo exijan.
 
 ### Compilar desde el código fuente
-
-Instala la misma versión de PlatformIO que utiliza CI y compila el entorno ATS Mini:
 
 ```bash
 python -m pip install platformio==6.1.18
 pio run --project-conf ci/platformio-release.ini -e ats-mini
 ```
 
-GitHub Actions también compila el firmware en cada envío de cambios y pull request. Para publicar una versión se requiere una etiqueta `X.Y.Z` que coincida con `FIRMWARE_VERSION` en `main.cpp`.
+GitHub Actions compila el firmware en cada envío de cambios y pull request. Para publicar una versión se requiere una etiqueta `X.Y.Z` que coincida con `FIRMWARE_VERSION` en `main.cpp`.
 
-### Compatibilidad y seguridad
+### Estructura del proyecto
 
-- Confirma el modelo y la revisión exactos del ATS Mini antes de flashear.
-- Usa solo imágenes compiladas para hardware compatible.
-- Conserva una copia de seguridad de los datos y la configuración importantes.
-- `firmware.bin` contiene la aplicación; no es una copia completa de la memoria flash.
-- No compartas números de serie, credenciales ni datos personales en solicitudes de soporte.
+| Ruta | Descripción |
+| :--- | :--- |
+| `main.cpp` | Aplicación principal y comportamiento de la radio |
+| `Display.h` | Controlador de pantalla del ATS Mini |
+| `Languages.h` | Traducciones de la interfaz multilingüe |
+| `SSBPatch.h` | Implementación del parche SSB |
+| `include/Remote.h` | Compatibilidad con control remoto Wi-Fi y BLE |
+| `ci/platformio-release.ini` | Configuración de compilación con PlatformIO |
+| `.github/workflows/firmware.yml` | Flujo de compilación y publicación |
 
 ### Soporte
 
-Al informar un problema, incluye el modelo y la revisión de la placa, el sistema operativo, la versión de `esptool`, el puerto serie y el mensaje de error exacto.
+Al informar un problema, incluye:
 
-### Licencia
+- Modelo y revisión de hardware de la placa
+- Sistema operativo
+- Versión de `esptool`
+- Puerto serie
+- Mensaje de error exacto
 
-Este repositorio no declara una licencia explícita. No supongas que el código fuente, el firmware o los binarios pueden reutilizarse, redistribuirse o modificarse sin permiso del titular de los derechos. Conserva todos los avisos de terceros; el parche SSB tiene restricciones de redistribución comercial.
+---
+
+## License / Licencia
+
+This repository does not declare an explicit license. Do not assume that source code, firmware, or binaries may be reused, redistributed, or modified without permission from the rights holder.
+
+Este repositorio no declara una licencia explícita. No se debe asumir que el código fuente, el firmware o los binarios pueden reutilizarse, redistribuirse o modificarse sin autorización del titular de los derechos.
