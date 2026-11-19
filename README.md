@@ -5,6 +5,7 @@
 
 **Custom firmware for the ATS Mini · ESP32-S3 · SI4732**
 
+[![Download firmware](https://img.shields.io/badge/Download-latest%20firmware-238636?style=for-the-badge&logo=github)](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest)
 [![Latest release](https://img.shields.io/github/v/release/satan666000/ATS-MINI-FIRMWARE?style=for-the-badge)](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest)
 [![Firmware CI](https://github.com/satan666000/ATS-MINI-FIRMWARE/actions/workflows/firmware.yml/badge.svg?branch=main)](https://github.com/satan666000/ATS-MINI-FIRMWARE/actions/workflows/firmware.yml)
 ![Platform](https://img.shields.io/badge/Platform-ESP32--S3-blue?style=for-the-badge)
@@ -12,6 +13,10 @@
 
 [English](#english) · [Español](#español) · [Flashing guide / Guía de flasheo](docs/FLASHING.md)
 
+</div>
+
+<div align="center">
+  <strong>Download the firmware</strong> · <a href="https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest">Get the latest release</a> · <a href="docs/FLASHING.md">Read the installation guide</a>
 </div>
 
 > [!WARNING]
@@ -37,14 +42,24 @@ KALIMAN is custom firmware for the ATS Mini radio, built around the ESP32-S3 and
 
 ### Features
 
-- FM reception with RDS/RBDS, AM, shortwave, and SSB (LSB/USB).
-- US CB band with 40 channels from 26.965 to 27.405 MHz.
-- Automatic modulation selection by band, with manual selection available.
-- Disabled, manual, or RSSI-based automatic squelch.
-- Automatic FM stereo or forced mono.
-- Signal strength, SNR, battery, and mono/stereo indicators.
-- Multilingual interface, selectable themes, and a reception-data HUD.
-- Animated startup screen and configurable menus.
+<table>
+  <tr>
+    <td width="50%" valign="top"><strong>FM broadcast</strong><br>FM reception with RDS/RBDS support.</td>
+    <td width="50%" valign="top"><strong>AM, shortwave &amp; SSB</strong><br>AM and shortwave reception, plus SSB in LSB and USB modes.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>US CB band</strong><br>40 channels from 26.965 to 27.405 MHz.</td>
+    <td width="50%" valign="top"><strong>Flexible tuning</strong><br>Automatic modulation selection by band or manual selection.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Squelch control</strong><br>Disabled, manual, or automatic RSSI-based operation.</td>
+    <td width="50%" valign="top"><strong>Audio modes</strong><br>Automatic FM stereo or forced mono.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Reception status</strong><br>Signal strength, SNR, battery, and mono/stereo indicators.</td>
+    <td width="50%" valign="top"><strong>Custom interface</strong><br>Multiple languages, selectable themes, a reception-data HUD, and an animated startup screen.</td>
+  </tr>
+</table>
 
 ### Compatibility and limitations
 
@@ -123,14 +138,24 @@ KALIMAN es un firmware personalizado para el ATS Mini, basado en el ESP32-S3 y e
 
 ### Características
 
-- Recepción FM con RDS/RBDS, AM, onda corta y SSB (LSB/USB).
-- Banda CB estadounidense con 40 canales, de 26,965 a 27,405 MHz.
-- Selección automática de modulación por banda y selección manual.
-- Squelch desactivado, manual o automático basado en RSSI.
-- FM estéreo automática o mono forzada.
-- Indicadores de intensidad de señal, SNR, batería y modo mono/estéreo.
-- Interfaz multilingüe, temas seleccionables y HUD con datos de recepción.
-- Pantalla de inicio animada y menús configurables.
+<table>
+  <tr>
+    <td width="50%" valign="top"><strong>FM comercial</strong><br>Recepción FM con soporte RDS/RBDS.</td>
+    <td width="50%" valign="top"><strong>AM, onda corta y SSB</strong><br>Recepción AM y de onda corta, además de SSB en modos LSB y USB.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Banda CB estadounidense</strong><br>40 canales de 26,965 a 27,405 MHz.</td>
+    <td width="50%" valign="top"><strong>Sintonización flexible</strong><br>Selección automática de modulación por banda o selección manual.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Control de squelch</strong><br>Desactivado, manual o automático basado en RSSI.</td>
+    <td width="50%" valign="top"><strong>Modos de audio</strong><br>FM estéreo automática o mono forzada.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><strong>Estado de recepción</strong><br>Indicadores de intensidad de señal, SNR, batería y modo mono/estéreo.</td>
+    <td width="50%" valign="top"><strong>Interfaz personalizable</strong><br>Varios idiomas, temas seleccionables, HUD con datos de recepción y pantalla de inicio animada.</td>
+  </tr>
+</table>
 
 ### Compatibilidad y limitaciones
 
