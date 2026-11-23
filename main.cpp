@@ -21,7 +21,7 @@ SI4735 radio;
 Preferences prefs;
 bool startupAbductCow=true;
 constexpr const char* FIRMWARE_NAME="KALIMAN";
-constexpr const char* FIRMWARE_VERSION="1.1.92";
+constexpr const char* FIRMWARE_VERSION="1.1.100";
 constexpr const char* FIRMWARE_CREATOR="KO6EAI";
 constexpr int POWER=15, AMP=10, MUTE=3, RESET=16, SDA_PIN=18, SCL_PIN=17;
 constexpr int BL=38, ENC_A=2, ENC_B=1, BUTTON=21, BATTERY_PIN=4;
