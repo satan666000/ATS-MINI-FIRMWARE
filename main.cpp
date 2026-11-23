@@ -21,7 +21,7 @@ SI4735 radio;
 Preferences prefs;
 bool startupAbductCow=true;
 constexpr const char* FIRMWARE_NAME="KALIMAN";
-constexpr const char* FIRMWARE_VERSION="1.1.88";
+constexpr const char* FIRMWARE_VERSION="1.1.92";
 constexpr const char* FIRMWARE_CREATOR="KO6EAI";
 constexpr int POWER=15, AMP=10, MUTE=3, RESET=16, SDA_PIN=18, SCL_PIN=17;
 constexpr int BL=38, ENC_A=2, ENC_B=1, BUTTON=21, BATTERY_PIN=4;
@@ -148,7 +148,7 @@ const uint16_t amSteps[]={1,5,9,10,50,100};
 const uint16_t fmSteps[]={1,5,10,20,50,100};
 const char* amFilters[]={"6","4","3","2","1","1.8","2.5"};
 const char* ssbFilters[]={"1.2","2.2","3","4","0.5","1"};
-const char* items[]={"Banda","Modo","Paso","Volumen","Filtro AM/SSB","AGC automatico","Atenuacion","BFO fino","HUD","Silencio","","","","Volver","Tema","Region","AMP","SYNC portadora (SSB)","","","","Squelch modo","Squelch nivel","Informacion","Idioma","Buscar senal","Temporizador audio","","FM estereo","Soft mute AM/SSB","Busqueda RSSI","Busqueda SNR","Audio FM 50/75 us","Ganancia AVC AM","Reloj: hora","Reloj: minutos","Reloj: AM / PM","Reloj: formato","WiFi TIME","TIME SYNC","AUTO CLOCK","WiFi","Clima","Propagacion","VFO A/B","Frecuencia directa","RDS FM","Reposo pantalla"};
+const char* items[]={"Banda","Modo","Paso","Volumen","Filtro AM/SSB","AGC automatico","Atenuacion","BFO fino","HUD","Silencio","","","","Volver","Tema","Region","AMP","SYNC portadora (SSB)","","","","Squelch modo","Squelch nivel","Informacion","Idioma","Buscar senal","Temporizador audio","","FM estereo","Soft mute AM/SSB","Busqueda RSSI","Busqueda SNR","Audio FM 50/75 us","Ganancia AVC AM","Reloj: hora","Reloj: minutos","Reloj: AM / PM","Reloj: formato","WiFi TIME","TIME SYNC","AUTO CLOCK","WiFi","Clima","Propagacion","VFO A/B","Frecuencia directa","RDS FM","Reposo pantalla","Actividad HF"};
 constexpr int ITEM_COUNT=sizeof(items)/sizeof(items[0]);
 // Stable setting IDs: grouping changes navigation, not stored settings.
 struct MenuGroup {const char* name; const char* hint; uint8_t ids[14]; uint8_t count;};
@@ -158,7 +158,8 @@ const MenuGroup menuGroups[]={
  {"Pantalla","HUD, colores e idioma",{8,14,24,46,47,13},6},
  {"Clima","Tiempo y unidades",{42,13},2},
  {"Propagacion","Indices solares y bandas HF/CB",{43,13},2},
- {"Sistema","Temporizador e informacion",{34,35,36,37,38,39,40,26,23,41,13},11}
+ {"Sistema","Temporizador e informacion",{34,35,36,37,38,39,40,26,23,41,13},11},
+ {"Actividad HF","Reportes recientes de POTA",{48,13},2}
 };
 constexpr int MENU_GROUP_COUNT=sizeof(menuGroups)/sizeof(menuGroups[0]);
 bool menuRoot=true;
@@ -694,7 +695,7 @@ MenuIcon itemIcon(int id){
   AUDIO, VFO_ICON, GEAR, GEAR, GEAR, FILTER, FILTER, INFO,
   LANGUAGE, SEARCH, CLOCK, GEAR, AUDIO, ICON_MUTE, SEARCH, SEARCH,
   AUDIO, FILTER, CLOCK, CLOCK, CLOCK, CLOCK, WIFI_ICON, CLOCK,
-  CLOCK, WIFI_ICON, WEATHER_ICON, SOLAR_ICON, VFO_ICON, STEP, RDS_ICON, SCREEN
+  CLOCK, WIFI_ICON, WEATHER_ICON, SOLAR_ICON, VFO_ICON, STEP, RDS_ICON, SCREEN, ANTENNA
  };
  static_assert(sizeof(icons)/sizeof(icons[0])==ITEM_COUNT,"Un icono por ajuste");
  return id>=0&&id<ITEM_COUNT?icons[id]:GEAR;
@@ -706,10 +707,11 @@ uint32_t lastAnimation=0;
 uint16_t iconPulse(uint16_t color);
 void animateSelection(int y,uint16_t color){
  // Decorative travelling highlight confined to the card border, never over text.
- int x=18+(animationFrame*9)%270;
+ int phase=animationFrame<16?animationFrame:31-animationFrame;
+ int x=18+phase*17;
  ui.drawFastHLine(x,y+30,12,iconPulse(color));
  // A mirrored glint and breathing corner brackets stay clear of the labels.
- ui.drawFastHLine(306-x,y+1,8,iconPulse(color));
+ ui.drawFastHLine(314-x,y+1,8,iconPulse(color));
  ui.drawFastVLine(5,y+8,6+abs(16-int(animationFrame))/2,iconPulse(color));
 }
 constexpr uint8_t pulseLevels[32]={7,6,6,6,5,5,4,4,3,2,2,1,1,0,0,0,0,0,0,0,1,1,2,2,3,4,4,5,5,6,6,6};
@@ -829,9 +831,10 @@ void textCell(int x,int y,int width,const String &original,uint16_t color,uint8_
  ui.setTextSize(size);
  while(size>1&&ui.textWidth(text)>width)ui.setTextSize(--size);
  String fitted;fitted.reserve(text.length()+3);fitted=text;
+ if(width<=0)return;
  if(ui.textWidth(fitted)>width){
   while(fitted.length()&&ui.textWidth(fitted+"...")>width)fitted.remove(fitted.length()-1);
-  fitted+="...";
+  if(ui.textWidth("...")<=width)fitted+="...";
  }
  ui.setTextColor(readableText(color));
  ui.setCursor(x+(center?max(0,(width-int(ui.textWidth(fitted)))/2):0),y);
@@ -956,7 +959,7 @@ void drawStartup(uint32_t elapsed){
  int fill=int(min(elapsed,6000UL)*234UL/6000UL);
  if(fill>0)ui.fillRect(43,146,fill,3,cyan);
  // Orbiting light along the bottom border.
- int comet=22+int(elapsed*100UL/1000UL)%276;
+ int comet=22+int(min(elapsed,6000UL)*275UL/6000UL);
  ui.drawFastHLine(max(22,comet-12),157,min(13,comet-21),violet);
  ui.fillCircle(comet,157,1,white);
  ui.pushSprite(0,0);
@@ -1255,6 +1258,7 @@ void drawWifi(uint16_t bg,uint16_t panel,uint16_t accent,uint16_t white,uint16_t
  label(10,158,"Girar: elegir / pulsar: aceptar",dim);ui.pushSprite(0,0);
 }
 #include "InternetInfo.h"
+#include "HfActivity.h"
 // All HUDs share bounded header, tuning, instruments and status areas.
 void draw(){
  themedText=true;
@@ -1263,6 +1267,7 @@ void draw(){
  uint16_t white=menuColor(1,colors.text),dim=menuColor(5,colors.dim);
  // Theme roles apply to every HUD, not just header icons.
  accent=menuColor(4,accent);
+ if(internetInfoMenu&&infoTab==4){drawHfActivity(bg,accent,white,dim);return;}
  if(internetInfoMenu){drawInternetInfo(bg,accent,white,dim);return;}
  if(wifiMenu){drawWifi(bg,panel,accent,white,dim);return;}
  ui.fillScreen(bg);ui.fillRect(0,0,320,20,panel);
@@ -1372,7 +1377,7 @@ void draw(){
     int n=start+row,y=43+row*35;
     bool selected=n==pos;
     uint16_t entryColor=menuColor(n,selected?accent:white);
-    ui.fillRoundRect(8,y,299,32,6,selected?bg:panel);
+    ui.fillRoundRect(8,y,299,32,6,selected?visualBlend(panel,accent,4):panel);
     if(selected){
      ui.drawRoundRect(8,y,299,32,6,visualBlend(panel,entryColor,12));
      ui.fillRoundRect(8,y,4,32,2,iconPulse(menuColor(n,accent)));
@@ -1392,7 +1397,7 @@ void draw(){
      else snprintf(range,sizeof(range),"%.3f - %.3f MHz",bands[idx].lo/1000.0,bands[idx].hi/1000.0);
      label(42,y+19,range,dim);
     }else if(menuRoot){
-     const MenuIcon groupIcons[]={ANTENNA,AUDIO,SCREEN,WEATHER_ICON,SOLAR_ICON,GEAR};
+     const MenuIcon groupIcons[]={ANTENNA,AUDIO,SCREEN,WEATHER_ICON,SOLAR_ICON,GEAR,ANTENNA};
      static_assert(sizeof(groupIcons)/sizeof(groupIcons[0])==MENU_GROUP_COUNT,"Un icono por grupo");
      menuIcon(19,y+8,n==MENU_GROUP_COUNT?BACK:groupIcons[n],selected?accent:dim);
      label(42,y+5,n==MENU_GROUP_COUNT?"< Volver":menuGroups[n].name,entryColor);
@@ -1404,7 +1409,9 @@ void draw(){
      label(42,y+19,id==13?"Pulsar para regresar":value(id),dim);
     }
    }
-   ui.fillRoundRect(313,43,3,102,1,panel);ui.fillRoundRect(313,43+pos*94/max(1,count-1),3,8,1,accent);
+   const int thumb=max(8,102*min(3,count)/max(1,count));
+   ui.fillRoundRect(313,43,3,102,1,panel);
+   ui.fillRoundRect(313,43+start*(102-thumb)/max(1,count-3),3,thumb,1,accent);
   }
  }else{
   String freq=frequencyText(frequencies[band]);
@@ -1422,6 +1429,15 @@ void draw(){
   int fw=ui.textWidth(freq),fx=(320-fw-26)/2;
   textCell(fx,40,fw,freq,white,font);
   textCell(fx+fw+6,58,20,"MHz",accent);
+  // Reception quality is local to the receiver, independent of solar data.
+  const int quality=(!ready||(rssi==0&&snr==0))?0:snr<8?1:snr<20?2:3;
+  const uint16_t signalColors[]={ui.color565(128,128,128),ui.color565(240,64,62),
+                                 ui.color565(255,148,32),ui.color565(42,203,98)};
+  const int signalX=min(299,fx+fw+38);
+  ui.fillCircle(signalX,56,5,signalColors[quality]);
+ ui.drawFastHLine(signalX-2,54,4,visualBlend(signalColors[quality],0xFFFF,10));
+  ui.drawCircle(signalX,56,6,dim);
+
   if(hud==29){
    // Two separate instruments: real histories, independent labelled scales.
    const size_t start=ecgCount==ECG_SAMPLES?ecgWrite:0;
@@ -1773,6 +1789,7 @@ void click(){
   else internetInfoMenu=false;
   dirty=true;return;
  }
+ if(menu&&!menuRoot&&item==48){internetInfoMenu=true;infoTab=4;editing=false;dirty=true;return;}
  if(menu&&!menuRoot&&(item==42||item==43)){internetInfoMenu=true;infoTab=item-42;propagationPage=0;infoEnabled=true;if(!infoRunning)infoNext=0;editing=false;dirty=true;return;}
  if(wifiMenu){wifiClick();return;}
  if(menu&&!menuRoot&&item==41){wifiMenu=true;wifiPage=WIFI_HOME;wifiChoice=0;editing=false;dirty=true;return;}
@@ -2010,7 +2027,7 @@ void loop(){
  wifiTick();
  // Five-minute checkpoints limit flash wear; manual edits save immediately.
  internetClockTick();
- infoTick();
+ infoTick();hfTick();
  if(clockSet&&esp_timer_get_time()-clockSavedAtUs>=300000000LL)persistClock();
  int currentClockMinute=clockSet?int(localClockSeconds()/60):-1;
  if(currentClockMinute!=clockLastMinute){clockLastMinute=currentClockMinute;dirty=true;}
@@ -2026,7 +2043,7 @@ void loop(){
   int d=quarters>0?1:-1;quarters=0;
   if(ready){
    if(signalSearch){cancelSearch();resetRds();}
-   if(internetInfoMenu){if(infoTab==1)propagationBand=wrap(propagationBand+d,9);else {const int pages[]={0,2,3};int pos=infoTab==0?0:infoTab==2?1:2;infoTab=pages[wrap(pos+d,3)];}dirty=true;}
+   if(internetInfoMenu){if(infoTab==4)hfOffset=constrain(hfOffset+d,0,max(0,int(hfData.count)-5));else if(infoTab==1)propagationBand=wrap(propagationBand+d,9);else {const int pages[]={0,2,3};int pos=infoTab==0?0:infoTab==2?1:2;infoTab=pages[wrap(pos+d,3)];}dirty=true;}
    else if(wifiMenu){wifiTurn(d);}
    else if(menu){if(infoMenu){infoPage=wrap(infoPage+d,2);dirty=true;}else if(ampMenu){
     if(ampEditing){if(ampItem==0)ampEnabled=!ampEnabled;else if(ampItem==1)volume=constrain(int(volume)+d,0,63);audioSettings();changed();}
@@ -2111,8 +2128,13 @@ void loop(){
   // Repaint only when the breathing brightness or antenna wave changes.
   int oldBrightness=pulseLevels[animationFrame];
   int newBrightness=pulseLevels[nextFrame];
-  if(oldBrightness!=newBrightness||(animationFrame/4)%3!=(nextFrame/4)%3||
-     (menu&&animationFrame!=nextFrame))dirty=true;
+  const bool headerVisible=!wifiMenu&&!internetInfoMenu;
+  const bool pulseVisible=headerVisible&&(!externalPower&&batteryLevel==0||externalPower);
+  const bool wifiWaves=headerVisible&&WiFi.status()==WL_CONNECTED;
+  const bool menuMotion=headerVisible&&menu&&(ampMenu||(!infoMenu&&(!editing||item==0)));
+  if((pulseVisible&&oldBrightness!=newBrightness)||
+     (wifiWaves&&(animationFrame/4)%3!=(nextFrame/4)%3)||
+     (menuMotion&&animationFrame!=nextFrame))dirty=true;
   animationFrame=nextFrame;
  }
  if(infoData.weather&&((internetInfoMenu&&infoTab==0)||(!internetInfoMenu&&!wifiMenu&&!menu))){
