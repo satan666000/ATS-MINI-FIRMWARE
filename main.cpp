@@ -1,4 +1,12 @@
 #include <Arduino.h>
+#include <HWCDC.h>
+// COM exposed by ESP32-S3 USB Serial/JTAG (303A:1001), not UART0.
+#if ARDUINO_USB_MODE && ARDUINO_USB_CDC_ON_BOOT
+static HWCDC& controlUsb = USBSerial;
+#else
+static HWCDC controlUsb;
+#endif
+
 #include <esp_system.h>
 #include <esp_heap_caps.h>
 #include <esp_timer.h>
@@ -17,7 +25,22 @@
 #include "Languages.h"
 LGFX screen;
 LGFX_Sprite ui(&screen);
-SI4735 radio;
+class AtsTuner : public SI4735 {
+public:
+ void startPatchedSSB(uint16_t lo,uint16_t hi,uint16_t f,uint16_t increment,uint8_t sideband){
+  // patchPowerUp already started the chip in AM with the SSB patch enabled.
+  currentTune=AM_TUNE_FREQ;lastMode=SSB_CURRENT_MODE;
+  currentFrequencyParams.raw[0]=0;
+  currentFrequencyParams.arg.ANTCAPH=0;currentFrequencyParams.arg.ANTCAPL=1;
+  retuneSSB(lo,hi,f,increment,sideband);
+ }
+ void retuneSSB(uint16_t lo,uint16_t hi,uint16_t f,uint16_t increment,uint8_t sideband){
+  // USBLSB is a tune-command field; no POWER_UP with an active patch.
+  currentMinimumFrequency=lo;currentMaximumFrequency=hi;currentStep=increment;
+  currentSsbStatus=sideband;setFrequency(constrain(f,lo,hi));
+ }
+};
+AtsTuner radio;
 Preferences prefs;
 bool startupAbductCow=true;
 constexpr const char* FIRMWARE_NAME="KALIMAN";
@@ -124,13 +147,14 @@ void locateBandFolder(int id){
  if(folderBand(f,i)==id){folder=f;folderPosition=i;return;}
 }
 // Keep legacy numeric IDs valid for saved preferences.
-const char* hudNames[]={"Estudio","Instrumental","Digital","Barras RF","Instrumental","Minimal","Estudio","Barras RF","Estudio","Barras RF","Instrumental","Digital","Estudio","Estudio","Instrumental","Barras RF","Digital","Digital","Instrumental","Digital","Barras RF","Barras RF","Barras RF","Instrumental","Instrumental","Digital","Diales","Prisma RF","Matriz RF","Electro RF","Anillos","Termometros","Cinta RF","Diamantes","Horizonte","Orbita RF","Regla RF","Balance RF"};
+const char* hudNames[]={"Estudio","Instrumental","Digital","Barras RF","Instrumental","Minimal","Estudio","Barras RF","Estudio","Barras RF","Instrumental","Digital","Estudio","Estudio","Instrumental","Barras RF","Digital","Digital","Instrumental","Digital","Barras RF","Barras RF","Barras RF","Instrumental","Instrumental","Digital","Diales","Prisma RF","Matriz RF","Electro RF","Anillos","Termometros","Cinta RF","Diamantes","Horizonte","Orbita RF","Regla RF","Balance RF","Sintonia simple"};
+constexpr uint8_t DEFAULT_HUD=38;
 constexpr int HUD_COUNT=sizeof(hudNames)/sizeof(hudNames[0]);
-constexpr uint8_t selectableHuds[]={0,1,2,5,3,26,27,28,29,30,31,32,33,34,35,36,37};
+constexpr uint8_t selectableHuds[]={0,1,2,5,3,26,27,28,29,30,31,32,33,34,35,36,37,DEFAULT_HUD};
 constexpr int SELECTABLE_HUD_COUNT=sizeof(selectableHuds)/sizeof(selectableHuds[0]);
 uint8_t canonicalHud(uint8_t id){
  switch(id){
- case 0:case 1:case 2:case 3:case 5:case 26:case 27:case 28:case 29:case 30:case 31:case 32:case 33:case 34:case 35:case 36:case 37:return id;
+ case 0:case 1:case 2:case 3:case 5:case 26:case 27:case 28:case 29:case 30:case 31:case 32:case 33:case 34:case 35:case 36:case 37:case DEFAULT_HUD:return id;
  case 4:case 10:case 14:case 18:case 23:case 24:return 1;
  case 11:case 16:case 17:case 19:case 25:return 2;
  case 7:case 9:case 15:case 20:case 21:case 22:return 3;
@@ -148,7 +172,7 @@ const uint16_t amSteps[]={1,5,9,10,50,100};
 const uint16_t fmSteps[]={1,5,10,20,50,100};
 const char* amFilters[]={"6","4","3","2","1","1.8","2.5"};
 const char* ssbFilters[]={"1.2","2.2","3","4","0.5","1"};
-const char* items[]={"Banda","Modo","Paso","Volumen","Filtro AM/SSB","AGC automatico","Atenuacion","BFO fino","HUD","Silencio","","","","Volver","Tema","Region","AMP","SYNC portadora (SSB)","","","","Squelch modo","Squelch nivel","Informacion","Idioma","Buscar senal","Temporizador audio","","FM estereo","Soft mute AM/SSB","Busqueda RSSI","Busqueda SNR","Audio FM 50/75 us","Ganancia AVC AM","Reloj: hora","Reloj: minutos","Reloj: AM / PM","Reloj: formato","WiFi TIME","TIME SYNC","AUTO CLOCK","WiFi","Clima","Propagacion","VFO A/B","Frecuencia directa","RDS FM","Reposo pantalla","Actividad HF"};
+const char* items[]={"Banda","Modo","Paso","Volumen","Filtro AM/SSB","AGC automatico","Atenuacion","BFO fino","HUD","Silencio","","","","Volver","Tema","Region","AMP","SYNC portadora (SSB)","","","","Squelch modo","Squelch nivel","Informacion","Idioma","Buscar senal","Temporizador audio","","FM estereo","Soft mute AM/SSB","Busqueda RSSI","Busqueda SNR","Audio FM 50/75 us","Ganancia AVC AM","Reloj: hora","Reloj: minutos","Reloj: AM / PM","Reloj: formato","WiFi TIME","TIME SYNC","AUTO CLOCK","WiFi","Clima","Propagacion","VFO A/B","Frecuencia directa","RDS FM","Reposo pantalla","Actividad HF","Restablecer de fabrica"};
 constexpr int ITEM_COUNT=sizeof(items)/sizeof(items[0]);
 // Stable setting IDs: grouping changes navigation, not stored settings.
 struct MenuGroup {const char* name; const char* hint; uint8_t ids[14]; uint8_t count;};
@@ -158,15 +182,16 @@ const MenuGroup menuGroups[]={
  {"Pantalla","HUD, colores e idioma",{8,14,24,46,47,13},6},
  {"Clima","Tiempo y unidades",{42,13},2},
  {"Propagacion","Indices solares y bandas HF/CB",{43,13},2},
- {"Sistema","Temporizador e informacion",{34,35,36,37,38,39,40,26,23,41,13},11},
+ {"Sistema","Temporizador e informacion",{34,35,36,37,38,39,40,26,23,41,49,13},12},
  {"Actividad HF","Reportes recientes de POTA",{48,13},2}
 };
 constexpr int MENU_GROUP_COUNT=sizeof(menuGroups)/sizeof(menuGroups[0]);
 bool menuRoot=true;
+bool resetMenu=false, resetConfirmed=false;
 int menuGroup=0,menuPosition=0;
 
 uint16_t frequencies[BAND_COUNT];
-uint8_t band=0, mode=0, volume=12, stepIndex=2, amFilter=3, ssbFilter=1, attenuation=0, hud=0;
+uint8_t band=0, mode=0, volume=12, stepIndex=2, amFilter=3, ssbFilter=1, attenuation=0, hud=DEFAULT_HUD;
 
 bool rdsEnabled=true;
 uint8_t screenSleep=0, activeVfo=0;
@@ -248,70 +273,7 @@ void applyRegion(){
  // Keep national authorization separate from receiver coverage.
  for(int i=0;i<BAND_COUNT;i++)frequencies[i]=constrain(frequencies[i],bands[i].lo,bands[i].hi);
 }
-// Manual widths are preserved while automatic reception selects its own width.
-bool amFilterAuto=false,ssbFilterAuto=false;
-uint8_t autoAmFilter=0,autoSsbFilter=2,filterCandidate=255;
-uint32_t filterCandidateAt=0,lastFilterChange=0;
-uint8_t activeFilter(){return mode?(ssbFilterAuto?autoSsbFilter:ssbFilter):(amFilterAuto?autoAmFilter:amFilter);}
-int16_t bfo=0;
-// AFC follows a carrier (SYNC); it is not voice-based SSB auto-tuning.
-bool afcEnabled=false;
-uint8_t squelch=0;
-// 0: off, 1: manual, 2: adaptive RSSI noise estimate (not audio DSP).
-uint8_t squelchMode=0,autoSquelchThreshold=6;
-int noiseFloorQ8=0;
-bool noiseFloorValid=false;
-uint32_t squelchTuneAt=0,squelchSampleAt=0;
-bool squelchClosed=false;
-uint32_t squelchOpenedAt=0;
-bool ready=false,dirty=true,menu=false,editing=false,volumeMode=false,agc=true,muted=false,patchLoaded=false;
-bool ampEnabled=true,ampMenu=false,ampEditing=false;
-int ampItem=0;
-bool infoMenu=false;
-bool signalSearch=false;
-uint16_t searchRemaining=0,searchOriginal=0;
-uint32_t searchAt=0,audioTimerAt=0;
-uint8_t audioTimerMinutes=0;
-// Defaults preserve the receiver soft-mute default and existing search limits.
-uint8_t softMuteDb=8,searchRssi=20,searchSnr=6;
-// Zero preserves the chip setting captured after band initialization.
-uint8_t fmDeemphasis=0;
-int32_t originalFmDeemphasis=-1;
-void cancelSearch();
-void startSearch();
-void pollSearch(uint32_t now);
-void setAudioTimer(int minutes);
-bool turnFine(int d);
-int infoPage=0;
-uint16_t step();
-bool settingsAvailable=false;
-constexpr size_t ECG_SAMPLES=96;
-uint8_t ecgSamples[ECG_SAMPLES]={};
-size_t ecgWrite=0,ecgCount=0;
-int hudVisual[2]={0,0}; // fixed-point percentages (x256)
-bool hudVisualInitialized=false;
-void resetHud(){ecgWrite=0;ecgCount=0;hudVisual[0]=hudVisual[1]=0;hudVisualInitialized=false;dirty=true;}
-uint8_t ecgSnrSamples[ECG_SAMPLES]={};
-void recordEcg(uint8_t sample,uint8_t snrSample){
- if(hud!=29)return;
- bool traceChanged=ecgCount<ECG_SAMPLES;
- for(size_t i=0;i<ecgCount;i++)if(ecgSamples[i]!=sample||ecgSnrSamples[i]!=snrSample){traceChanged=true;break;}
- ecgSamples[ecgWrite]=sample;
- ecgSnrSamples[ecgWrite]=snrSample;
- ecgWrite=(ecgWrite+1)%ECG_SAMPLES;
- if(ecgCount<ECG_SAMPLES)ecgCount++;
- if(traceChanged&&!menu)dirty=true;
-}
-int item=0,encoderState=0,quarters=0;
-bool buttonRaw=true,buttonStable=true,buttonArmed=true;
-uint32_t buttonChange=0,pressedAt=0,lastSignal=0,saveAt=0;
-uint8_t rssi=0,snr=0;
-// Live receiver measurements, not microphone levels. Actual cadence also
-// depends on I2C transactions and screen drawing; unchanged values stay steady.
-constexpr uint32_t SIGNAL_POLL_MS=100; // 10 real samples/s; avoid redundant I2C traffic.
-uint32_t lastBattery=0,lastDraw=0;
-int batteryMillivolts=0,batteryLevel=-1;
-bool externalPower=false;
+// 
 // ATS Mini reference Battery.cpp: GPIO4, raw ADC correction 1.702.
 // The monitor reads the shared supply: USB voltage is NOT battery charge.
 void pollBattery(){
@@ -586,8 +548,8 @@ void selectBand(bool showLoading=true){
    }
    radio.loadPatch(ssbPatch,sizeof(ssbPatch),ssbFilter);patchLoaded=true;
    radio.setSSBConfig(activeFilter(),1,0,1,0,1);
-  }
-  radio.setSSB(b.lo,b.hi,frequencies[band],step(),mode);
+   radio.startPatchedSSB(b.lo,b.hi,frequencies[band],step(),mode);
+  }else radio.retuneSSB(b.lo,b.hi,frequencies[band],step(),mode);
  }
  waitTuneComplete();resetRds(true);squelchClosed=wasSquelchClosed;
  // Hold the hardware clamp through chip audio restoration.
@@ -632,6 +594,7 @@ void setAudioTimer(int minutes){
  dirty=true;
 }
 String value(int n){
+ if(n==49)return "Borrar ajustes y WiFi";
  switch(n){
  case 34:{int hour=localClockSeconds()/3600;return String(clock12h?(hour%12?hour%12:12):hour)+(clock12h?(hour<12?" AM":" PM"):" h")+(clockSet?"":" / ajustar");}
  case 35:{char text[8];snprintf(text,sizeof(text),"%02u",unsigned(localClockSeconds()/60%60));return String(text);}
@@ -696,7 +659,7 @@ MenuIcon itemIcon(int id){
   LANGUAGE, SEARCH, CLOCK, GEAR, AUDIO, ICON_MUTE, SEARCH, SEARCH,
   AUDIO, FILTER, CLOCK, CLOCK, CLOCK, CLOCK, WIFI_ICON, CLOCK,
   CLOCK, WIFI_ICON, WEATHER_ICON, SOLAR_ICON, VFO_ICON, STEP, RDS_ICON, SCREEN, ANTENNA
- };
+ ,GEAR};
  static_assert(sizeof(icons)/sizeof(icons[0])==ITEM_COUNT,"Un icono por ajuste");
  return id>=0&&id<ITEM_COUNT?icons[id]:GEAR;
 }
@@ -1329,7 +1292,14 @@ void draw(){
  }
  textCell(batteryX+24,6,ui.textWidth(powerText),powerText,white);
  if(!ready){label(12,60,"Radio no detectada",white);ui.pushSprite(0,0);return;}
- if(menu){
+ if(resetMenu){
+  centered(30,"RESTABLECER DE FABRICA",accent);
+  centered(53,"Se borraran ajustes, VFO y WiFi.",white);
+  centered(69,"El firmware KALIMAN se conserva.",dim);
+  ui.fillRoundRect(10,91,300,32,6,panel);
+  centered(100,resetConfirmed?"Borrar y reiniciar":"Cancelar",accent,2);
+  centered(139,"Girar: elegir / Pulsar: aceptar",dim);
+ }else if(menu){
   if(infoMenu){
    label(12,27,infoPage==0?"INFORMACION / RADIO":"INFORMACION / FIRMWARE",accent);
    label(280,27,String(infoPage+1)+"/2",dim);
@@ -1438,7 +1408,20 @@ void draw(){
  ui.drawFastHLine(signalX-2,54,4,visualBlend(signalColors[quality],0xFFFF,10));
   ui.drawCircle(signalX,56,6,dim);
 
-  if(hud==29){
+  if(hud==DEFAULT_HUD){
+   const int left=18,right=302,y=108;
+   const Band& b=bands[band];
+   const int span=int(b.hi)-b.lo;
+   const int offset=constrain(int(frequencies[band])-b.lo,0,max(0,span));
+   const int marker=span>0?left+offset*(right-left)/span:left;
+   textCell(left,82,138,String("RSSI ")+rssi+" dBuV",white);
+   textCell(164,82,138,String("SNR ")+snr+" dB",white,1,true);
+   ui.drawFastHLine(left,y,right-left+1,dim);
+   for(int i=0;i<=10;i++)ui.drawFastVLine(left+i*(right-left)/10,y-2,i%5==0?7:5,dim);
+   ui.fillRoundRect(marker-2,y-6,5,13,2,accent);
+   textCell(left,118,120,band==CB_BAND?String("CH 1"):frequencyText(b.lo),dim);
+   textCell(right-120,118,120,band==CB_BAND?String("CH 40"):frequencyText(b.hi),dim,1,true);
+  }else if(hud==29){
    // Two separate instruments: real histories, independent labelled scales.
    const size_t start=ecgCount==ECG_SAMPLES?ecgWrite:0;
    for(int n=0;n<2;n++){
@@ -1768,6 +1751,18 @@ void adjust(int d){
  changed();
 }
 void click(){
+ if(resetMenu){
+  resetMenu=false;dirty=true;
+  if(!resetConfirmed)return;
+  if(!settingsAvailable||!prefs.clear()){
+   message("No se pudieron borrar los ajustes");return;
+  }
+  prefs.end();
+  ESP.restart();
+  return;
+ }
+ if(menu&&!menuRoot&&item==49){resetMenu=true;resetConfirmed=false;dirty=true;return;}
+
  if(menu&&!menuRoot&&item==44){switchVfo();return;}
  if(menu&&!menuRoot&&item==45){
   if(!directEntry){directHz=uint32_t(frequencies[band])*(band==0?10000UL:1000UL);directDigit=0;directEntry=true;editing=true;}
@@ -1835,8 +1830,9 @@ void click(){
  editing=true;if(item==0){locateBandFolder(band);folderOpen=false;}
  dirty=true;
 }
+void usbControlTick();
 void setup(){
- Serial.begin(115200);
+ controlUsb.begin(115200);
  analogReadResolution(12);
  // The ESP32 Arduino ADC channel must exist before its attenuation is set.
  (void)analogRead(BATTERY_PIN);
@@ -1852,7 +1848,7 @@ void setup(){
  if(!ui.createSprite(320,170)){
   screen.setTextColor(0xFFFF,0);screen.setCursor(8,50);screen.print("Error: memoria de pantalla");
   Serial.println("No se pudo reservar el buffer de pantalla; radio desactivada.");
-  while(true)delay(1000);
+  while(true){usbControlTick();delay(10);}
  }
  ui.setTextWrap(false);
  rdsName.reserve(8);rdsText.reserve(64);rdsScrollSource.reserve(64);notice.reserve(64);
@@ -1868,7 +1864,7 @@ void setup(){
  weatherImperial=prefs.getBool("wxUS",false);
  clock12h=prefs.getBool("clock12",false);
  autoClock=prefs.getBool("autoclock",true);
- zoneName=prefs.getString("tzname","");zoneOffset=constrain(prefs.getInt("tzoffset",0),-50400,50400);zoneDst=prefs.getBool("tzdst",false);
+ zoneName=prefs.isKey("tzname") ? prefs.getString("tzname", "") : "";zoneOffset=constrain(prefs.getInt("tzoffset",0),-50400,50400);zoneDst=prefs.getBool("tzdst",false);
  wifiAutoEnabled=settingsAvailable&&prefs.getBool("wifion",false);
  if(wifiAutoEnabled)wifiBeginSaved();
  else Serial.println("WiFi: autoconexion desactivada; conecta una red desde el menu");
@@ -1884,7 +1880,7 @@ void setup(){
  afcEnabled=prefs.getBool("afc",false); // Restore preference; activation remains SSB-only.
  rdsEnabled=prefs.getBool("rdsOn",true);screenSleep=constrain(prefs.getUChar("lcdSleep",0),0,10);
  activeVfo=constrain(prefs.getUChar("vfoSel",0),0,1);
- if(prefs.getBytesLength("vfoAB")==sizeof(vfo)){
+ if(prefs.isKey("vfoAB") && prefs.getBytesLength("vfoAB")==sizeof(vfo)){
   VfoState loaded[2]={};
   if(prefs.getBytes("vfoAB",loaded,sizeof(loaded))==sizeof(loaded)){
    // Region bounds are applied later; reject corrupt data, not valid presets.
@@ -1894,7 +1890,7 @@ void setup(){
  squelch=constrain(prefs.getUChar("sql",0),0,80);
  squelchMode=constrain(prefs.getUChar("sqlmode",squelch?1:0),0,2);
  for(int i=0;i<BAND_COUNT;i++)frequencies[i]=bands[i].initial;
- size_t savedFreqBytes=prefs.getBytesLength("freq");
+ size_t savedFreqBytes=prefs.isKey("freq") ? prefs.getBytesLength("freq") : 0;
  if(savedFreqBytes && savedFreqBytes<=sizeof(frequencies) && savedFreqBytes%sizeof(uint16_t)==0){
   // Preserve defaults on failed reads; older, shorter band tables remain valid.
   uint16_t pending[BAND_COUNT];memcpy(pending,frequencies,sizeof(pending));
@@ -1910,13 +1906,14 @@ void setup(){
  // Legacy manual amavc preference is intentionally ignored.
  softMuteDb=constrain(prefs.getUChar("softmute",8),0,8);
  searchRssi=constrain(prefs.getUChar("seekrssi",20),0,80);searchSnr=constrain(prefs.getUChar("seeksnr",6),0,50);
- attenuation=constrain(prefs.getUChar("att",0),0,26);agc=prefs.getBool("agc",true);hud=canonicalHud(constrain(prefs.getUChar("hud",0),0,HUD_COUNT-1));
+ attenuation=constrain(prefs.getUChar("att",0),0,26);agc=prefs.getBool("agc",true);hud=canonicalHud(constrain(prefs.getUChar("hud",DEFAULT_HUD),0,HUD_COUNT-1));
  theme=constrain(prefs.getUChar("theme",0),0,THEME_COUNT-1);region=constrain(prefs.getUChar("region",0),0,6);applyRegion();
  bfo=constrain(prefs.getShort("bfo",0),-16000,16000);
  const uint32_t startupAt=millis();
  uint32_t startupFrameAt=startupAt;
  drawStartup(0);
  while(uint32_t(millis()-startupAt)<6000UL){
+  usbControlTick();
   const uint32_t now=millis();
   if(uint32_t(now-startupFrameAt)>=33UL){
    startupFrameAt=now;drawStartup(now-startupAt);
@@ -1946,13 +1943,21 @@ bool turnFine(int d){
 void usbReply(const char* error=nullptr){
  JsonDocument doc;doc["protocol"]="KALIMAN-USB-1";doc["ok"]=error==nullptr;
  if(error)doc["error"]=error;
+ doc["language"]=language;
  doc["ready"]=ready;doc["band"]=band;doc["band_name"]=bands[band].name;
+ doc["tune_step_hz"]=uint32_t(step())*(band==0?10000UL:1000UL);
+ doc["cb_channel"]=band==CB_BAND?cbChannel(frequencies[band])+1:0;
  doc["frequency_hz"]=uint32_t(frequencies[band])*(band==0?10000UL:1000UL);
  doc["mode"]=band==0?"FM":mode==1?"LSB":mode==2?"USB":"AM";
  doc["automatic_mode"]=false;doc["sync_enabled"]=afcEnabled;doc["sync_active"]=autoVfoActive();doc["bfo_hz"]=bfo;
+ doc["agc"]=band==0||agc;doc["attenuation"]=attenuation;
+ if(band){doc["filter_auto"]=mode?ssbFilterAuto:amFilterAuto;doc["filter_index"]=activeFilter();}
  doc["volume"]=volume;doc["mute"]=muted;doc["squelch"]=squelch;
  doc["squelch_mode"]=squelchMode;doc["rssi"]=rssi;doc["snr"]=snr;
- serializeJson(doc,Serial);Serial.println();
+ // Reuse the output buffer for frequent STATUS polls.
+ static String response;
+ response.remove(0);
+ serializeJson(doc,response);response+='\n';controlUsb.print(response);
 }
 void usbCommand(char* line){
  char* arg=strchr(line,' ');if(arg){*arg++=0;while(*arg==' ')arg++;}
@@ -1961,7 +1966,7 @@ void usbCommand(char* line){
   JsonDocument doc;doc["protocol"]="KALIMAN-USB-1";doc["ok"]=true;
   JsonArray list=doc["bands"].to<JsonArray>();
   for(int i=0;i<BAND_COUNT;i++){JsonObject b=list.add<JsonObject>();b["id"]=i;b["name"]=bands[i].name;b["min_hz"]=uint32_t(bands[i].lo)*(i==0?10000UL:1000UL);b["max_hz"]=uint32_t(bands[i].hi)*(i==0?10000UL:1000UL);}
-  serializeJson(doc,Serial);Serial.println();return;
+  String response;serializeJson(doc,response);response+='\n';controlUsb.print(response);return;
  }
  if(!ready){usbReply("RADIO_NOT_READY");return;}
  if(!arg||!*arg){usbReply("MISSING_ARGUMENT");return;}
@@ -1969,19 +1974,28 @@ void usbCommand(char* line){
   int m=!strcmp(arg,"AM")?0:!strcmp(arg,"LSB")?1:!strcmp(arg,"USB")?2:-1;
   if(band==0){if(strcmp(arg,"FM")){usbReply("FM_BAND_ONLY");return;}usbReply();return;}
   if(m<0||(band==CB_BAND&&m!=0)){usbReply("INVALID_MODE");return;}
-  mode=m;bfo=0;selectBand(false);usbReply();return;
+  if(mode!=m){mode=m;bfo=0;selectBand(false);}usbReply();return;
  }
  errno=0;char* end=nullptr;long n=strtol(arg,&end,10);
  if(errno||end==arg||*end){usbReply("INVALID_NUMBER");return;}
- if(!strcmp(line,"BAND")){
+ if(!strcmp(line,"LANG")){
+  if(n<0||n>=LANGUAGE_COUNT){usbReply("INVALID_LANGUAGE");return;}
+  if(language!=n){language=uint8_t(n);changed();}
+ }else if(!strcmp(line,"BAND")){
   if(n<0||n>=BAND_COUNT){usbReply("INVALID_BAND");return;}
   band=n;selectBand(false);
+ }else if(!strcmp(line,"TUNE")){
+  if(n< -20||n>20||n==0){usbReply("INVALID_TUNE_STEPS");return;}
+  const Band& b=bands[band];
+  uint16_t f=band==CB_BAND?cbFrequencies[wrap(cbChannel(frequencies[band])+int(n),40)]:
+   constrain(long(frequencies[band])+n*step(),long(b.lo),long(b.hi));
+  cancelSearch();if(f!=frequencies[band]){frequencies[band]=f;tuneConfirmed(f);resetRds();changed();}
  }else if(!strcmp(line,"FREQ")){
   long unit=band==0?10000:1000;
   if(n< long(bands[band].lo)*unit||n>long(bands[band].hi)*unit||n%unit){usbReply("FREQUENCY_OUT_OF_RANGE_OR_RESOLUTION");return;}
   uint16_t f=n/unit;
   if(band==CB_BAND&&cbFrequencies[cbChannel(f)]!=f){usbReply("INVALID_CB_CHANNEL_FREQUENCY");return;}
-  cancelSearch();frequencies[band]=f;radio.setFrequency(f);resetRds();changed();
+  cancelSearch();frequencies[band]=f;tuneConfirmed(f);resetRds();changed();
  }else if(!strcmp(line,"AUTOMODE")){
   if(n<0||n>1){usbReply("RANGE_0_1");return;}
   usbReply("AUTOMODE_REMOVED_USE_MODE");return;
@@ -1989,6 +2003,18 @@ void usbCommand(char* line){
   if(n<0||n>1){usbReply("RANGE_0_1");return;}
   if(!band||!mode||band==CB_BAND){usbReply("SYNC_REQUIRES_LSB_USB_AM_CARRIER");return;}
   afcEnabled=n;audioSettings();changed();
+ }else if(!strcmp(line,"AGC")||!strcmp(line,"ATT")||!strcmp(line,"FILTER")){
+  if(!band){usbReply("AM_SSB_ONLY");return;}
+  if(!strcmp(line,"AGC")){
+   if(n<0||n>1){usbReply("RANGE_0_1");return;}agc=n;
+  }else if(!strcmp(line,"ATT")){
+   if(n<0||n>26){usbReply("RANGE_0_26");return;}agc=false;attenuation=n;
+  }else{
+   if(n< -1||n>=(mode?6:7)){usbReply("INVALID_FILTER");return;}
+   if(mode){ssbFilterAuto=n==-1;if(n>=0)ssbFilter=n;}
+   else{amFilterAuto=n==-1;if(n>=0)amFilter=n;}
+  }
+  audioSettings();changed();
  }else if(!strcmp(line,"BFO")){
   if(!band||!mode||band==CB_BAND){usbReply("SSB_ONLY");return;}
   if(n< -16000||n>16000){usbReply("RANGE_MINUS16000_16000");return;}
@@ -2007,8 +2033,9 @@ void usbCommand(char* line){
 void usbControlTick(){
  static char line[96];static size_t used=0;static bool overflow=false;
  int budget=128;
- while(budget--&&Serial.available()){
-  char c=Serial.read();if(c=='\r')continue;
+ while(budget--&&controlUsb.available()){
+  int c=controlUsb.read();if(c<0)break;
+  if(c=='\r')continue;
   if(c=='\n'){
    line[used]=0;if(overflow)usbReply("LINE_TOO_LONG");else if(used)usbCommand(line);
    used=0;overflow=false;break;
@@ -2045,6 +2072,7 @@ void loop(){
    if(signalSearch){cancelSearch();resetRds();}
    if(internetInfoMenu){if(infoTab==4)hfOffset=constrain(hfOffset+d,0,max(0,int(hfData.count)-5));else if(infoTab==1)propagationBand=wrap(propagationBand+d,9);else {const int pages[]={0,2,3};int pos=infoTab==0?0:infoTab==2?1:2;infoTab=pages[wrap(pos+d,3)];}dirty=true;}
    else if(wifiMenu){wifiTurn(d);}
+   else if(resetMenu){resetConfirmed=!resetConfirmed;dirty=true;}
    else if(menu){if(infoMenu){infoPage=wrap(infoPage+d,2);dirty=true;}else if(ampMenu){
     if(ampEditing){if(ampItem==0)ampEnabled=!ampEnabled;else if(ampItem==1)volume=constrain(int(volume)+d,0,63);audioSettings();changed();}
     else{ampItem=wrap(ampItem+d,3);dirty=true;}
@@ -2065,7 +2093,7 @@ void loop(){
  if(now-buttonChange>=30&&raw!=buttonStable){
   buttonStable=raw;if(!raw){pressedAt=now;buttonArmed=true;}
   else if(!buttonArmed){buttonArmed=true;}
-  else if(ready){if(now-pressedAt>=700){bool childView=internetInfoMenu||wifiMenu;internetInfoMenu=false;wifiMenu=false;wifiPassword="";cancelSearch();menu=childView?true:!menu;menuRoot=true;menuGroup=0;menuPosition=0;item=0;infoMenu=false;ampMenu=false;ampEditing=false;editing=false;directEntry=false;volumeMode=false;dirty=true;}else click();}
+  else if(ready){if(now-pressedAt>=700){bool childView=internetInfoMenu||wifiMenu;resetMenu=false;internetInfoMenu=false;wifiMenu=false;wifiPassword="";cancelSearch();menu=childView?true:!menu;menuRoot=true;menuGroup=0;menuPosition=0;item=0;infoMenu=false;ampMenu=false;ampEditing=false;editing=false;directEntry=false;volumeMode=false;dirty=true;}else click();}
  }
  pollSearch(now);
  now=millis(); // Never compare fresh tuning timestamps with an older clock.
