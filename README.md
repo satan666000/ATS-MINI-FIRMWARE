@@ -38,7 +38,7 @@
 
 KALIMAN is custom firmware for the ATS Mini radio, built around the ESP32-S3 and SI4732 receiver. Developed by **KO6EAI**, it adds expanded reception options and a configurable, multilingual interface.
 
-**Firmware source version:** `1.1.50` · **Latest published release:** see [GitHub Releases](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest).
+**Firmware source version:** `1.1.100` · **Latest published release:** see [GitHub Releases](https://github.com/satan666000/ATS-MINI-FIRMWARE/releases/latest).
 
 ### Features
 
